@@ -99,6 +99,20 @@ async function autoInitialize() {
     console.log("✅ Database already initialised, skipping schema import");
     const alterations = [
       {
+        sql: `CREATE TABLE IF NOT EXISTS audit_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NULL,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NULL,
+    entity_id INT UNSIGNED NULL,
+    details TEXT NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB`,
+        msg: "Created audit_logs table",
+      },
+      {
         sql: "ALTER TABLE ram_specs DROP COLUMN brand",
         msg: "Removed RAM brand column",
       },

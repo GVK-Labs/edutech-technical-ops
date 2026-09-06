@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
 import {
   Activity,
   BarChart3,
@@ -17,6 +18,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import {
   Select,
   SelectContent,
@@ -51,6 +57,13 @@ const emptyOverview = {
   hourly: [],
   performance: {},
   generated_at: null,
+};
+
+const activityChartConfig = {
+  events: {
+    label: "Events",
+    color: "var(--chart-1)",
+  },
 };
 
 export default function AuditPortal() {
@@ -284,26 +297,44 @@ export default function AuditPortal() {
               </div>
               <Badge variant="outline">24h</Badge>
             </div>
-            <div className="flex h-40 items-end gap-1.5 border-b border-l px-2 pb-0">
+            <div className="h-40 border-b border-l px-2">
               {overview.hourly.length === 0 ? (
-                <p className="mb-4 w-full text-center text-xs text-muted-foreground">
+                <p className="pt-14 text-center text-xs text-muted-foreground">
                   No activity in the last 24 hours.
                 </p>
               ) : (
-                overview.hourly.map((item) => (
-                  <div
-                    key={item.hour}
-                    className="group flex h-full flex-1 flex-col justify-end"
-                    title={`${item.hour}: ${item.count} events`}
+                <ChartContainer
+                  config={activityChartConfig}
+                  className="h-full w-full"
+                >
+                  <LineChart
+                    accessibilityLayer
+                    data={overview.hourly}
+                    margin={{ left: 8, right: 8, top: 10, bottom: 0 }}
                   >
-                    <div
-                      className="min-h-1 rounded-t bg-primary/75 transition-all group-hover:bg-primary"
-                      style={{
-                        height: `${Math.max((Number(item.count) / Math.max(...overview.hourly.map((entry) => Number(entry.count)), 1)) * 100, 3)}%`,
-                      }}
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="hour"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tickFormatter={(value) => value.slice(0, 2)}
                     />
-                  </div>
-                ))
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent />}
+                    />
+                    <Line
+                      dataKey="count"
+                      name="events"
+                      type="monotone"
+                      stroke="var(--color-events)"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ChartContainer>
               )}
             </div>
           </div>
