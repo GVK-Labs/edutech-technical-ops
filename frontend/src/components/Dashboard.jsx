@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   AlertTriangle,
+  ArrowUpRight,
+  BarChart2,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
@@ -111,6 +114,7 @@ function BreakdownRow({ label, value, badge, tone = "text-foreground" }) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -225,6 +229,107 @@ export default function Dashboard() {
             </Button>
           </div>
         )}
+
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {[
+            [
+              "Active jobs",
+              data.stats.activeJobs,
+              "text-sky-700",
+              "bg-sky-50",
+              ClipboardList,
+              "/app/jobs",
+            ],
+            [
+              "Ready to deliver",
+              data.stats.readyForDelivery,
+              "text-emerald-700",
+              "bg-emerald-50",
+              PackageCheck,
+              "/app/delivery",
+            ],
+            [
+              "Available stock",
+              data.stats.availableInventory,
+              "text-amber-700",
+              "bg-amber-50",
+              Cpu,
+              "/app/inventory",
+            ],
+            [
+              "Open repairs",
+              data.stats.activeRepairs,
+              "text-rose-700",
+              "bg-rose-50",
+              Wrench,
+              "/app/afterservice",
+            ],
+            [
+              "Borrowed items",
+              data.stats.outstandingBorrowings,
+              "text-violet-700",
+              "bg-violet-50",
+              ClipboardList,
+              "/app/lending",
+            ],
+            [
+              "Completed jobs",
+              data.breakdowns.jobs.completed || 0,
+              "text-slate-700",
+              "bg-slate-100",
+              CheckCircle2,
+              "/app/reports",
+            ],
+          ].map(([label, value, tone, background, Icon, path]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => navigate(path)}
+              className="group min-w-0 rounded-lg border bg-background p-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-md ${background} ${tone}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
+              <p className="mt-3 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {label}
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">
+                {loading ? "—" : Number(value || 0).toLocaleString()}
+              </p>
+            </button>
+          ))}
+        </section>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-slate-950 px-4 py-3 text-white shadow-sm">
+          <div>
+            <p className="text-sm font-semibold">Operations command center</p>
+            <p className="text-xs text-slate-300">
+              Jump directly to the queue that needs attention.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["New job", "/app/jobs", ClipboardList],
+              ["Inventory", "/app/inventory", Cpu],
+              ["Reports", "/app/reports", BarChart2],
+            ].map(([label, path, Icon]) => (
+              <Button
+                key={label}
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(path)}
+                className="gap-1.5"
+              >
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         <section className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Card className="flex h-full min-w-0 flex-col rounded-lg">
