@@ -218,6 +218,10 @@ async function autoInitialize() {
       END`,
         msg: "Create updated trigger",
       },
+      {
+        sql: "ALTER TABLE ops_models MODIFY processor_series VARCHAR(30) NOT NULL",
+        msg: "Updated OPS processor series format",
+      },
     ];
     for (const { sql, msg } of alterations) {
       try {

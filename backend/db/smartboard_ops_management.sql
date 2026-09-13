@@ -75,7 +75,7 @@ CREATE TABLE smartboard_models (
 CREATE TABLE ops_models (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     model_name      VARCHAR(100) NOT NULL UNIQUE,
-    processor_series ENUM('i','ultra') NOT NULL,
+    processor_series VARCHAR(30) NOT NULL,
     processor_core  VARCHAR(20)  NOT NULL,
     processor_count TINYINT UNSIGNED NULL,
     base_speed_ghz  DECIMAL(4,2) NULL,
