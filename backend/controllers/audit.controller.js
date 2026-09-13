@@ -1,4 +1,46 @@
 import pool from "../config/db.config.js";
+import os from "os";
+
+let previousCpuSample = null;
+
+const getServerPerformance = (dbLatencyMs) => {
+  const currentCpu = process.cpuUsage();
+  const currentTime = process.hrtime.bigint();
+  let cpuPercent = 0;
+  if (previousCpuSample) {
+    const elapsedMicros = Number(currentTime - previousCpuSample.time) / 1000;
+    const cpuMicros =
+      currentCpu.user -
+      previousCpuSample.cpu.user +
+      currentCpu.system -
+      previousCpuSample.cpu.system;
+    cpuPercent = elapsedMicros > 0 ? (cpuMicros / elapsedMicros) * 100 : 0;
+  }
+  previousCpuSample = { cpu: currentCpu, time: currentTime };
+
+  const memory = process.memoryUsage();
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const cpuCount = os.cpus().length || 1;
+
+  return {
+    cpuPercent: Math.min(100, Math.round(cpuPercent * 10) / 10),
+    cpuCount,
+    loadAverage: os.loadavg()[0] || 0,
+    memoryRssMb: Math.round(memory.rss / 1024 / 1024),
+    heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+    heapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+    totalMemoryMb: Math.round(totalMemory / 1024 / 1024),
+    freeMemoryMb: Math.round(freeMemory / 1024 / 1024),
+    memoryPercent:
+      Math.round(((totalMemory - freeMemory) / totalMemory) * 1000) / 10,
+    dbLatencyMs,
+    uptimeSeconds: Math.round(process.uptime()),
+    nodeVersion: process.version,
+    platform: `${process.platform} ${process.arch}`,
+    pid: process.pid,
+  };
+};
 
 const auditVisibilityEnabled = async () => {
   try {
@@ -78,13 +120,7 @@ export const getAuditOverview = async (req, res) => {
         entities: entities[0],
         actors: actors[0],
         hourly: hourly[0],
-        performance: {
-          uptimeSeconds: Math.round(process.uptime()),
-          dbLatencyMs,
-          memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
-          heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-          nodeVersion: process.version,
-        },
+        performance: getServerPerformance(dbLatencyMs),
         generated_at: new Date().toISOString(),
       },
     });

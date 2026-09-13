@@ -4,9 +4,13 @@ import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
 import {
   Activity,
   BarChart3,
+  Cpu,
   FileSearch,
+  Gauge,
+  HardDrive,
   LogOut,
   RefreshCw,
+  Server,
   ShieldCheck,
   Users,
   Zap,
@@ -377,36 +381,104 @@ export default function AuditPortal() {
           </div>
         </section>
 
-        <section className="rounded-xl border bg-background p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold">Server performance</h2>
-              <p className="text-xs text-muted-foreground">
-                Read-only health metrics from the audit API server.
-              </p>
+        <section className="overflow-hidden rounded-xl border bg-background shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Server className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Server Task Manager</h2>
+                <p className="text-xs text-muted-foreground">
+                  Live host and Node.js resource usage · refreshes every 10
+                  seconds
+                </p>
+              </div>
             </div>
             <Badge variant="outline">
-              Node {overview.performance?.nodeVersion || "—"}
+              {overview.performance?.platform || "Server metrics"}
             </Badge>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              [
-                "API database latency",
-                `${overview.performance?.dbLatencyMs || 0} ms`,
-              ],
-              [
-                "Server uptime",
-                `${Math.floor((overview.performance?.uptimeSeconds || 0) / 3600)}h ${Math.floor(((overview.performance?.uptimeSeconds || 0) % 3600) / 60)}m`,
-              ],
-              ["Memory RSS", `${overview.performance?.memoryRssMb || 0} MB`],
-              ["Heap used", `${overview.performance?.heapUsedMb || 0} MB`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-muted/40 p-3">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="mt-1 text-lg font-bold tabular-nums">{value}</p>
-              </div>
-            ))}
+          <div className="grid gap-5 p-5 lg:grid-cols-[1.35fr_0.65fr]">
+            <div className="space-y-5">
+              {[
+                {
+                  label: "CPU usage",
+                  value: Number(overview.performance?.cpuPercent || 0),
+                  suffix: "%",
+                  icon: Cpu,
+                  color: "bg-sky-500",
+                },
+                {
+                  label: "System memory",
+                  value: Number(overview.performance?.memoryPercent || 0),
+                  suffix: "%",
+                  icon: HardDrive,
+                  color: "bg-amber-500",
+                },
+                {
+                  label: "Node heap",
+                  value: overview.performance?.heapTotalMb
+                    ? (Number(overview.performance.heapUsedMb || 0) /
+                        Number(overview.performance.heapTotalMb)) *
+                      100
+                    : 0,
+                  suffix: "%",
+                  icon: Gauge,
+                  color: "bg-emerald-500",
+                },
+              ].map(({ label, value, suffix, icon: Icon, color }) => (
+                <div key={label}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2 font-medium">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      {label}
+                    </span>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {Math.round(value * 10) / 10}
+                      {suffix}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${color}`}
+                      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ["DB latency", `${overview.performance?.dbLatencyMs || 0} ms`],
+                [
+                  "Uptime",
+                  `${Math.floor((overview.performance?.uptimeSeconds || 0) / 3600)}h ${Math.floor(((overview.performance?.uptimeSeconds || 0) % 3600) / 60)}m`,
+                ],
+                ["RSS memory", `${overview.performance?.memoryRssMb || 0} MB`],
+                [
+                  "Heap",
+                  `${overview.performance?.heapUsedMb || 0} / ${overview.performance?.heapTotalMb || 0} MB`,
+                ],
+                [
+                  "Free memory",
+                  `${overview.performance?.freeMemoryMb || 0} MB`,
+                ],
+                ["CPU cores", overview.performance?.cpuCount || "—"],
+                [
+                  "Load average",
+                  Number(overview.performance?.loadAverage || 0).toFixed(2),
+                ],
+                ["Process ID", overview.performance?.pid || "—"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
