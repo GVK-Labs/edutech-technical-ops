@@ -177,7 +177,7 @@ export default function Header() {
                   <User className="mr-2 h-4 w-4" /> Account Settings
                 </DropdownMenuItem>
               )}
-              {["admin", "manager"].includes(user.role) && (
+              {user.role === "admin" && (
                 <DropdownMenuItem onClick={() => navigate("/app/settings")}>
                   <Settings className="mr-2 h-4 w-4" /> Settings
                 </DropdownMenuItem>

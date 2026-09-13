@@ -11,7 +11,7 @@ export default function SettingsRouter() {
       <Route
         index
         element={
-          <RoleRoute allowedRoles={["admin", "manager"]}>
+          <RoleRoute allowedRoles={["admin"]}>
             <SettingsHub />
           </RoleRoute>
         }
@@ -27,7 +27,7 @@ export default function SettingsRouter() {
       <Route
         path="preferences"
         element={
-          <RoleRoute allowedRoles={["admin", "manager"]}>
+          <RoleRoute allowedRoles={["admin"]}>
             <PreferencesSettings />
           </RoleRoute>
         }
@@ -35,7 +35,7 @@ export default function SettingsRouter() {
       <Route
         path="system-configuration"
         element={
-          <RoleRoute allowedRoles={["admin", "manager"]}>
+          <RoleRoute allowedRoles={["admin"]}>
             <SystemConfiguration />
           </RoleRoute>
         }

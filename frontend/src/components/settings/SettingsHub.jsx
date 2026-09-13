@@ -29,7 +29,7 @@ const categories = [
     color: "text-green-600",
     bg: "bg-green-50",
     path: "/app/settings/preferences",
-    roles: ["admin", "manager"],
+    roles: ["admin"],
   },
   {
     id: "system",
@@ -40,7 +40,7 @@ const categories = [
     color: "text-purple-600",
     bg: "bg-purple-50",
     path: "/app/settings/system-configuration",
-    roles: ["admin", "manager"],
+    roles: ["admin"],
   },
 ];
 

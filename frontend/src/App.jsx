@@ -27,7 +27,14 @@ function App() {
     <>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/audit" element={<AuditPortal />} />
+        <Route
+          path="/audit"
+          element={
+            <RoleRoute allowedRoles={["auditor"]}>
+              <AuditPortal />
+            </RoleRoute>
+          }
+        />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         <Route path="/app" element={<DashboardLayout />}>

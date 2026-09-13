@@ -187,7 +187,7 @@ export default function Sidebar() {
       <SidebarFooter className="border-t">
         <SidebarMenu>
           <SidebarMenuItem>
-            {["admin", "manager"].includes(role) && (
+            {role === "admin" && (
               <SidebarMenuButton
                 asChild
                 size="lg"
