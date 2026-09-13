@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
@@ -122,6 +122,51 @@ function ResourceGraph({ title, value, color, data, dataKey }) {
   );
 }
 
+const sameRows = (previous, next) => {
+  if (previous.length !== next.length) return false;
+  return previous.every((row, index) => {
+    const candidate = next[index];
+    return (
+      row.id === candidate.id &&
+      row.created_at === candidate.created_at &&
+      row.action === candidate.action &&
+      row.entity_type === candidate.entity_type &&
+      row.entity_id === candidate.entity_id &&
+      row.details === candidate.details &&
+      row.ip_address === candidate.ip_address &&
+      row.full_name === candidate.full_name &&
+      row.username === candidate.username
+    );
+  });
+};
+
+const AuditLogRow = memo(function AuditLogRow({ log }) {
+  return (
+    <tr className="border-b last:border-0 align-top">
+      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+        {new Date(log.created_at).toLocaleString("en-GB")}
+      </td>
+      <td className="px-4 py-3">
+        <p className="font-medium">{log.full_name || "System"}</p>
+        <p className="text-xs text-muted-foreground">{log.username || "—"}</p>
+      </td>
+      <td className="px-4 py-3">
+        <Badge variant="outline">{log.action}</Badge>
+      </td>
+      <td className="px-4 py-3 text-xs">
+        {pretty(log.entity_type)}
+        {log.entity_id ? ` #${log.entity_id}` : ""}
+      </td>
+      <td className="max-w-xs break-words px-4 py-3 text-xs text-muted-foreground">
+        {readableDetails(log.details)}
+      </td>
+      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+        {log.ip_address || "—"}
+      </td>
+    </tr>
+  );
+});
+
 export default function AuditPortal() {
   const navigate = useNavigate();
   const [authorised, setAuthorised] = useState(null);
@@ -144,6 +189,7 @@ export default function AuditPortal() {
   const [overview, setOverview] = useState(emptyOverview);
   const [live, setLive] = useState(false);
   const [performanceHistory, setPerformanceHistory] = useState([]);
+  const hasLoadedLogs = useRef(false);
 
   useEffect(() => {
     axios
@@ -154,7 +200,7 @@ export default function AuditPortal() {
 
   const load = useCallback(async () => {
     if (!authorised) return;
-    setLoading(true);
+    setLoading(!hasLoadedLogs.current);
     try {
       const params = new URLSearchParams({ page: String(page), limit: "50" });
       if (filters.action !== "all") params.set("action", filters.action);
@@ -167,15 +213,31 @@ export default function AuditPortal() {
         axios.get(`${API_URL}/audit/logs?${params}`),
         axios.get(`${API_URL}/audit/filters`),
       ]);
-      setLogs(logsResponse.data.data || []);
-      setPagination(logsResponse.data.pagination || { total: 0, limit: 50 });
-      setOptions(
-        optionsResponse.data.data || {
-          actions: [],
-          entityTypes: [],
-          users: [],
-        },
+      const nextLogs = logsResponse.data.data || [];
+      const nextPagination = logsResponse.data.pagination || {
+        total: 0,
+        limit: 50,
+      };
+      const nextOptions = optionsResponse.data.data || {
+        actions: [],
+        entityTypes: [],
+        users: [],
+      };
+      setLogs((previous) =>
+        sameRows(previous, nextLogs) ? previous : nextLogs,
       );
+      setPagination((previous) =>
+        previous.total === nextPagination.total &&
+        previous.limit === nextPagination.limit
+          ? previous
+          : nextPagination,
+      );
+      setOptions((previous) =>
+        JSON.stringify(previous) === JSON.stringify(nextOptions)
+          ? previous
+          : nextOptions,
+      );
+      hasLoadedLogs.current = true;
     } catch (errorResponse) {
       toast.error(
         errorResponse.response?.data?.Error || "Could not load audit records",
@@ -692,35 +754,7 @@ export default function AuditPortal() {
                 </thead>
                 <tbody>
                   {logs.map((log) => (
-                    <tr
-                      key={log.id}
-                      className="border-b last:border-0 align-top"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                        {new Date(log.created_at).toLocaleString("en-GB")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">
-                          {log.full_name || "System"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {log.username || "—"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline">{log.action}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {pretty(log.entity_type)}
-                        {log.entity_id ? ` #${log.entity_id}` : ""}
-                      </td>
-                      <td className="max-w-xs px-4 py-3 text-xs text-muted-foreground break-words">
-                        {readableDetails(log.details)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {log.ip_address || "—"}
-                      </td>
-                    </tr>
+                    <AuditLogRow key={log.id} log={log} />
                   ))}
                 </tbody>
               </table>
