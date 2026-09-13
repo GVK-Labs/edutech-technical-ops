@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   Activity,
   BarChart3,
@@ -70,6 +70,58 @@ const activityChartConfig = {
   },
 };
 
+const getHeapPercent = (performance) =>
+  performance?.heapTotalMb
+    ? (Number(performance.heapUsedMb || 0) / Number(performance.heapTotalMb)) *
+      100
+    : 0;
+
+function ResourceGraph({ title, value, color, data, dataKey }) {
+  return (
+    <div className="min-w-0 rounded-lg border bg-card p-3">
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
+          <p className="font-mono text-2xl font-semibold tabular-nums">
+            {value.toFixed(1)}%
+          </p>
+        </div>
+        <span className="text-[10px] text-muted-foreground">60 sec</span>
+      </div>
+      <div className="h-32 min-w-0">
+        <ChartContainer
+          config={{ metric: { label: title, color } }}
+          className="h-full w-full aspect-auto"
+        >
+          <LineChart
+            data={data}
+            margin={{ top: 5, right: 4, bottom: 0, left: 0 }}
+          >
+            <CartesianGrid strokeDasharray="2 3" />
+            <XAxis dataKey="sample" hide />
+            <YAxis
+              domain={[0, 100]}
+              ticks={[0, 50, 100]}
+              width={25}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 9 }}
+            />
+            <Line
+              dataKey={dataKey}
+              type="monotone"
+              stroke={color}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartContainer>
+      </div>
+    </div>
+  );
+}
+
 export default function AuditPortal() {
   const navigate = useNavigate();
   const [authorised, setAuthorised] = useState(null);
@@ -91,6 +143,7 @@ export default function AuditPortal() {
   const [pagination, setPagination] = useState({ total: 0, limit: 50 });
   const [overview, setOverview] = useState(emptyOverview);
   const [live, setLive] = useState(false);
+  const [performanceHistory, setPerformanceHistory] = useState([]);
 
   useEffect(() => {
     axios
@@ -137,7 +190,19 @@ export default function AuditPortal() {
     try {
       const { data } = await axios.get(`${API_URL}/audit/overview`);
       if (data.Status) {
-        setOverview(data.data || emptyOverview);
+        const nextOverview = data.data || emptyOverview;
+        setOverview(nextOverview);
+        setPerformanceHistory((current) =>
+          [
+            ...current,
+            {
+              sample: current.length + 1,
+              cpu: Number(nextOverview.performance?.cpuPercent || 0),
+              memory: Number(nextOverview.performance?.memoryPercent || 0),
+              heap: getHeapPercent(nextOverview.performance),
+            },
+          ].slice(-60),
+        );
         setLive(true);
       }
     } catch {
@@ -155,7 +220,7 @@ export default function AuditPortal() {
   }, [authorised, load]);
   useEffect(() => {
     refreshOverview();
-    const interval = window.setInterval(refreshOverview, 10000);
+    const interval = window.setInterval(refreshOverview, 1000);
     return () => window.clearInterval(interval);
   }, [refreshOverview]);
 
@@ -382,7 +447,7 @@ export default function AuditPortal() {
         </section>
 
         <section className="overflow-hidden rounded-xl border bg-background shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Server className="h-5 w-5" />
@@ -390,94 +455,136 @@ export default function AuditPortal() {
               <div>
                 <h2 className="font-semibold">Server Task Manager</h2>
                 <p className="text-xs text-muted-foreground">
-                  Live host and Node.js resource usage · refreshes every 10
-                  seconds
+                  Performance · Processes · Details
                 </p>
               </div>
             </div>
-            <Badge variant="outline">
-              {overview.performance?.platform || "Server metrics"}
-            </Badge>
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={`h-2 w-2 rounded-full ${live ? "bg-emerald-500" : "bg-slate-400"}`}
+              />
+              <span className="text-muted-foreground">
+                {live ? "Updating every second" : "Waiting for server"}
+              </span>
+              <Badge variant="outline">
+                {overview.performance?.platform || "—"}
+              </Badge>
+            </div>
           </div>
-          <div className="grid gap-5 p-5 lg:grid-cols-[1.35fr_0.65fr]">
-            <div className="space-y-5">
+          <div className="grid lg:grid-cols-[190px_minmax(0,1fr)]">
+            <aside className="border-b bg-muted/20 p-3 lg:border-b-0 lg:border-r">
+              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Resources
+              </p>
               {[
-                {
-                  label: "CPU usage",
-                  value: Number(overview.performance?.cpuPercent || 0),
-                  suffix: "%",
-                  icon: Cpu,
-                  color: "bg-sky-500",
-                },
-                {
-                  label: "System memory",
-                  value: Number(overview.performance?.memoryPercent || 0),
-                  suffix: "%",
-                  icon: HardDrive,
-                  color: "bg-amber-500",
-                },
-                {
-                  label: "Node heap",
-                  value: overview.performance?.heapTotalMb
-                    ? (Number(overview.performance.heapUsedMb || 0) /
-                        Number(overview.performance.heapTotalMb)) *
-                      100
-                    : 0,
-                  suffix: "%",
-                  icon: Gauge,
-                  color: "bg-emerald-500",
-                },
-              ].map(({ label, value, suffix, icon: Icon, color }) => (
-                <div key={label}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-                    <span className="flex items-center gap-2 font-medium">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      {label}
-                    </span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {Math.round(value * 10) / 10}
-                      {suffix}
-                    </span>
+                [
+                  "CPU",
+                  Cpu,
+                  Number(overview.performance?.cpuPercent || 0),
+                  "sky",
+                ],
+                [
+                  "Memory",
+                  HardDrive,
+                  Number(overview.performance?.memoryPercent || 0),
+                  "amber",
+                ],
+                [
+                  "Node heap",
+                  Gauge,
+                  getHeapPercent(overview.performance),
+                  "emerald",
+                ],
+              ].map(([label, Icon, value, tone]) => (
+                <div
+                  key={label}
+                  className="mb-2 rounded-md border bg-background px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{label}</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-500 ${color}`}
-                      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+                  <div className="mt-2 flex items-end justify-between">
+                    <span className="font-mono text-lg font-semibold tabular-nums">
+                      {value.toFixed(1)}%
+                    </span>
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        tone === "sky"
+                          ? "bg-sky-500"
+                          : tone === "amber"
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                      }`}
                     />
                   </div>
                 </div>
               ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {[
-                ["DB latency", `${overview.performance?.dbLatencyMs || 0} ms`],
-                [
-                  "Uptime",
-                  `${Math.floor((overview.performance?.uptimeSeconds || 0) / 3600)}h ${Math.floor(((overview.performance?.uptimeSeconds || 0) % 3600) / 60)}m`,
-                ],
-                ["RSS memory", `${overview.performance?.memoryRssMb || 0} MB`],
-                [
-                  "Heap",
-                  `${overview.performance?.heapUsedMb || 0} / ${overview.performance?.heapTotalMb || 0} MB`,
-                ],
-                [
-                  "Free memory",
-                  `${overview.performance?.freeMemoryMb || 0} MB`,
-                ],
-                ["CPU cores", overview.performance?.cpuCount || "—"],
-                [
-                  "Load average",
-                  Number(overview.performance?.loadAverage || 0).toFixed(2),
-                ],
-                ["Process ID", overview.performance?.pid || "—"],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-1 font-mono text-sm font-semibold tabular-nums">
-                    {value}
-                  </p>
-                </div>
-              ))}
+            </aside>
+            <div className="min-w-0 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <ResourceGraph
+                  title="CPU usage"
+                  value={Number(overview.performance?.cpuPercent || 0)}
+                  color="#0ea5e9"
+                  data={performanceHistory}
+                  dataKey="cpu"
+                />
+                <ResourceGraph
+                  title="System memory"
+                  value={Number(overview.performance?.memoryPercent || 0)}
+                  color="#f59e0b"
+                  data={performanceHistory}
+                  dataKey="memory"
+                />
+                <ResourceGraph
+                  title="Node heap"
+                  value={getHeapPercent(overview.performance)}
+                  color="#10b981"
+                  data={performanceHistory}
+                  dataKey="heap"
+                />
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  [
+                    "DB latency",
+                    `${overview.performance?.dbLatencyMs || 0} ms`,
+                  ],
+                  [
+                    "Uptime",
+                    `${Math.floor((overview.performance?.uptimeSeconds || 0) / 3600)}h ${Math.floor(((overview.performance?.uptimeSeconds || 0) % 3600) / 60)}m`,
+                  ],
+                  [
+                    "RSS memory",
+                    `${overview.performance?.memoryRssMb || 0} MB`,
+                  ],
+                  [
+                    "Heap",
+                    `${overview.performance?.heapUsedMb || 0} / ${overview.performance?.heapTotalMb || 0} MB`,
+                  ],
+                  [
+                    "Free memory",
+                    `${overview.performance?.freeMemoryMb || 0} MB`,
+                  ],
+                  ["CPU cores", overview.performance?.cpuCount || "—"],
+                  [
+                    "Load average",
+                    Number(overview.performance?.loadAverage || 0).toFixed(2),
+                  ],
+                  ["Process ID", overview.performance?.pid || "—"],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-md bg-muted/40 px-3 py-2.5"
+                  >
+                    <p className="text-[11px] text-muted-foreground">{label}</p>
+                    <p className="mt-1 font-mono text-sm font-semibold tabular-nums">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
