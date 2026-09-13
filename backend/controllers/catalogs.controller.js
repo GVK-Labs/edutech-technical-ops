@@ -1,22 +1,39 @@
 import pool from "../config/db.config.js";
 import { logAction } from "../utils/audit.js";
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
+import { defaultOpsCpuSpecs } from "../db/ops-specs-default.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const opsSpecsPath = path.resolve(
-  __dirname,
-  "../../frontend/public/ops-cpu-specs.json",
-);
+const OPS_SPECS_KEY = "ops_cpu_specs";
 
-const findOpsSpecsPath = () => opsSpecsPath;
+const ensureOpsSpecsSetting = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      id INT NOT NULL AUTO_INCREMENT,
+      setting_key VARCHAR(100) NOT NULL,
+      setting_value TEXT,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_setting_key (setting_key)
+    ) ENGINE=InnoDB
+  `);
+
+  const [[existing]] = await pool.query(
+    "SELECT setting_value FROM system_settings WHERE setting_key = ?",
+    [OPS_SPECS_KEY],
+  );
+  if (existing) return JSON.parse(existing.setting_value);
+
+  const data = defaultOpsCpuSpecs;
+  await pool.query(
+    "INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES (?, ?)",
+    [OPS_SPECS_KEY, JSON.stringify(data)],
+  );
+  return data;
+};
 
 export const getOpsCpuSpecs = async (req, res) => {
   try {
-    const filePath = await findOpsSpecsPath();
-    const content = await fs.readFile(filePath, "utf8");
-    res.json({ Status: true, data: JSON.parse(content) });
+    const data = await ensureOpsSpecsSetting();
+    res.json({ Status: true, data });
   } catch (err) {
     res.status(500).json({
       Status: false,
@@ -43,9 +60,11 @@ export const updateOpsCpuSpecs = async (req, res) => {
   }
 
   try {
-    const filePath = await findOpsSpecsPath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+    await ensureOpsSpecsSetting();
+    await pool.query(
+      "UPDATE system_settings SET setting_value = ? WHERE setting_key = ?",
+      [JSON.stringify(data), OPS_SPECS_KEY],
+    );
     void logAction({
       userId: req.user.id,
       action: "catalog.ops_specs_updated",

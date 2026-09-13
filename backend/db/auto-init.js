@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
+import { defaultOpsCpuSpecs } from "./ops-specs-default.js";
 
 dotenv.config();
 
@@ -71,6 +72,23 @@ async function seedLocations(conn) {
       );
     }
   }
+}
+
+async function seedOpsSpecs(conn) {
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      id INT NOT NULL AUTO_INCREMENT,
+      setting_key VARCHAR(100) NOT NULL,
+      setting_value TEXT,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_setting_key (setting_key)
+    ) ENGINE=InnoDB
+  `);
+  await conn.query(
+    "INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES (?, ?)",
+    ["ops_cpu_specs", JSON.stringify(defaultOpsCpuSpecs)],
+  );
 }
 
 async function autoInitialize() {
@@ -219,6 +237,7 @@ async function autoInitialize() {
     );
     await ensureTriggers(conn, schema);
     await seedLocations(conn);
+    await seedOpsSpecs(conn);
     await conn.query(
       "ALTER TABLE jobs MODIFY job_type ENUM('smartboard','ops','both') NOT NULL DEFAULT 'both'",
     );
@@ -261,6 +280,7 @@ async function autoInitialize() {
 
   console.log("✅ Database schema initialised successfully");
   await seedLocations(conn);
+  await seedOpsSpecs(conn);
   try {
     await conn.query(
       "ALTER TABLE jobs ADD COLUMN job_type ENUM('new','service') NOT NULL DEFAULT 'new' AFTER job_number",
