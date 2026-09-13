@@ -66,6 +66,7 @@ const COMPONENT_TYPES = [
   { value: "ram", label: "RAM", icon: MemoryStick },
   { value: "storage", label: "Storage", icon: HardDrive },
   { value: "network_card", label: "Network Card", icon: Network },
+  { value: "flat_panel", label: "Flat Panel", icon: Monitor },
 ];
 
 export default function Lending() {
@@ -124,13 +125,13 @@ export default function Lending() {
   // -- BARCODE SCANNING LOGIC --
 
   const handleScan = async (e) => {
-    if (e.key !== 'Enter') return;
+    if (e.key !== "Enter") return;
     if (!scanValue.trim()) return;
 
     const serial = scanValue.trim();
-    
+
     // Check if already staged
-    if (stagedItems.some(i => i.serial_number === serial)) {
+    if (stagedItems.some((i) => i.serial_number === serial)) {
       toast.error("Item is already in the list to be lent.");
       setScanValue("");
       return;
@@ -138,13 +139,15 @@ export default function Lending() {
 
     try {
       setIsScanning(true);
-      const res = await axios.get(`${API_URL}/borrowings/scan?serial_number=${encodeURIComponent(serial)}`);
+      const res = await axios.get(
+        `${API_URL}/borrowings/scan?serial_number=${encodeURIComponent(serial)}`,
+      );
       if (res.data.Status) {
         const item = res.data.data;
         if (item.status !== "in_stock") {
           toast.error(`Cannot lend ${serial}. Status is '${item.status}'.`);
         } else {
-          setStagedItems(prev => [...prev, item]);
+          setStagedItems((prev) => [...prev, item]);
           toast.success(`Added ${serial} to lending list.`);
         }
       }
@@ -163,7 +166,9 @@ export default function Lending() {
   };
 
   const removeStagedItem = (inventory_id) => {
-    setStagedItems(prev => prev.filter(i => i.inventory_id !== inventory_id));
+    setStagedItems((prev) =>
+      prev.filter((i) => i.inventory_id !== inventory_id),
+    );
   };
 
   const handleLendBatch = async () => {
@@ -181,10 +186,10 @@ export default function Lending() {
       const payload = {
         technician_id: selectedTechnician,
         notes: lendNotes,
-        items: stagedItems.map(i => ({
+        items: stagedItems.map((i) => ({
           component_type: i.component_type,
-          inventory_id: i.inventory_id
-        }))
+          inventory_id: i.inventory_id,
+        })),
       };
 
       const res = await axios.post(`${API_URL}/borrowings/lend-batch`, payload);
@@ -210,13 +215,17 @@ export default function Lending() {
     if (!actionTarget) return;
 
     try {
-      const res = await axios.post(`${API_URL}/borrowings/${actionTarget.id}/${actionTarget.action}`);
+      const res = await axios.post(
+        `${API_URL}/borrowings/${actionTarget.id}/${actionTarget.action}`,
+      );
       if (res.data.Status) {
         toast.success(`Item successfully marked as ${actionTarget.action}d`);
         fetchBorrowings();
       }
     } catch (error) {
-      toast.error(error.response?.data?.Error || `Failed to ${actionTarget.action} item`);
+      toast.error(
+        error.response?.data?.Error || `Failed to ${actionTarget.action} item`,
+      );
     } finally {
       setActionTarget(null);
     }
@@ -243,22 +252,31 @@ export default function Lending() {
   };
 
   const activeCount = borrowings.filter((b) => b.status === "borrowed").length;
-  const returnedCount = borrowings.filter((b) => b.status === "returned").length;
-  const consumedCount = borrowings.filter((b) => b.status === "consumed").length;
+  const returnedCount = borrowings.filter(
+    (b) => b.status === "returned",
+  ).length;
+  const consumedCount = borrowings.filter(
+    (b) => b.status === "consumed",
+  ).length;
 
   return (
     <main className="overflow-y-auto p-4 sm:p-5 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Technician Lending</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Technician Lending
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Manage inventory borrowed by technicians for testing and repair
           </p>
         </div>
-        <Button onClick={() => {
-          setIsLendOpen(true);
-          setTimeout(() => scannerInputRef.current?.focus(), 100);
-        }} className="bg-primary hover:bg-primary/90">
+        <Button
+          onClick={() => {
+            setIsLendOpen(true);
+            setTimeout(() => scannerInputRef.current?.focus(), 100);
+          }}
+          className="bg-primary hover:bg-primary/90"
+        >
           <Barcode className="h-4 w-4 mr-2" />
           Lend Items
         </Button>
@@ -267,42 +285,54 @@ export default function Lending() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="relative overflow-hidden rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Borrowings</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Active Borrowings
+            </CardTitle>
             <div className="rounded-full bg-blue-100 dark:bg-blue-900/30 p-2">
               <Handshake className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{activeCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Currently checked out</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Currently checked out
+            </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-200 via-blue-400 to-blue-200 dark:from-blue-900/50 dark:via-blue-600/50 dark:to-blue-900/50" />
         </Card>
-        
+
         <Card className="relative overflow-hidden rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Returned</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Returned
+            </CardTitle>
             <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 p-2">
               <Undo2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{returnedCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Successfully returned items</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Successfully returned items
+            </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-200 via-emerald-400 to-emerald-200 dark:from-emerald-900/50 dark:via-emerald-600/50 dark:to-emerald-900/50" />
         </Card>
 
         <Card className="relative overflow-hidden rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Consumed</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Consumed
+            </CardTitle>
             <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-2">
               <CheckCircle2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{consumedCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Installed in field / consumed</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Installed in field / consumed
+            </p>
           </CardContent>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-200 via-amber-400 to-amber-200 dark:from-amber-900/50 dark:via-amber-600/50 dark:to-amber-900/50" />
         </Card>
@@ -334,7 +364,7 @@ export default function Lending() {
               </div>
             </div>
           </CardHeader>
-          
+
           <div className="p-0">
             <div className="overflow-x-auto">
               <Table className="min-w-[800px]">
@@ -345,7 +375,9 @@ export default function Lending() {
                     <TableHead>Details</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Notes</TableHead>
-                    {activeTab === "borrowed" && <TableHead className="text-right">Actions</TableHead>}
+                    {activeTab === "borrowed" && (
+                      <TableHead className="text-right">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -360,7 +392,10 @@ export default function Lending() {
                     </TableRow>
                   ) : filteredBorrowings.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="text-center h-24 text-muted-foreground"
+                      >
                         <Handshake className="h-8 w-8 mb-2 opacity-20 mx-auto" />
                         <p>No borrowings found.</p>
                       </TableCell>
@@ -371,58 +406,78 @@ export default function Lending() {
                         <TableCell className="font-medium">
                           {b.technician_name}
                         </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
-                            {getComponentIcon(b.component_type)}
-                          </div>
-                          <span className="capitalize">{b.component_type.replace('_', ' ')}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-sm">{b.serial_number}</span>
-                          <span className="text-xs text-muted-foreground">{b.item_details}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div className="flex flex-col">
-                          <span>{format(parseISO(b.borrowed_at), "MMM d, yyyy")}</span>
-                          {b.returned_at && (
-                            <span className="text-xs text-muted-foreground">
-                              {activeTab === 'returned' ? 'Returned: ' : 'Consumed: '} 
-                              {format(parseISO(b.returned_at), "MMM d, yyyy")}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
+                              {getComponentIcon(b.component_type)}
+                            </div>
+                            <span className="capitalize">
+                              {b.component_type.replace("_", " ")}
                             </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-                        {b.notes || "—"}
-                      </TableCell>
-                      {activeTab === "borrowed" && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                              onClick={() => setActionTarget({ id: b.id, action: 'return' })}
-                            >
-                              <Undo2 className="h-4 w-4 mr-1" />
-                              Return
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                              onClick={() => setActionTarget({ id: b.id, action: 'consume' })}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Consume
-                            </Button>
                           </div>
                         </TableCell>
-                      )}
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-sm">
+                              {b.serial_number}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {b.item_details}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex flex-col">
+                            <span>
+                              {format(parseISO(b.borrowed_at), "MMM d, yyyy")}
+                            </span>
+                            {b.returned_at && (
+                              <span className="text-xs text-muted-foreground">
+                                {activeTab === "returned"
+                                  ? "Returned: "
+                                  : "Consumed: "}
+                                {format(parseISO(b.returned_at), "MMM d, yyyy")}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                          {b.notes || "—"}
+                        </TableCell>
+                        {activeTab === "borrowed" && (
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                onClick={() =>
+                                  setActionTarget({
+                                    id: b.id,
+                                    action: "return",
+                                  })
+                                }
+                              >
+                                <Undo2 className="h-4 w-4 mr-1" />
+                                Return
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                onClick={() =>
+                                  setActionTarget({
+                                    id: b.id,
+                                    action: "consume",
+                                  })
+                                }
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Consume
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
@@ -444,7 +499,6 @@ export default function Lending() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-2 space-y-6 py-4">
-            
             {/* Technician Selection */}
             <div className="space-y-2">
               <Label>Technician *</Label>
@@ -469,7 +523,9 @@ export default function Lending() {
             <div className="space-y-2 bg-muted/30 p-4 rounded-lg border">
               <div className="flex items-center justify-between mb-2">
                 <Label>Scan Component Barcode</Label>
-                {isScanning && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                {isScanning && (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
               </div>
               <div className="relative">
                 <Barcode className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -505,9 +561,12 @@ export default function Lending() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="font-medium text-sm">{item.serial_number}</div>
+                            <div className="font-medium text-sm">
+                              {item.serial_number}
+                            </div>
                             <div className="text-xs text-muted-foreground capitalize">
-                              {item.component_type.replace('_', ' ')} &middot; {item.item_details}
+                              {item.component_type.replace("_", " ")} &middot;{" "}
+                              {item.item_details}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -515,7 +574,9 @@ export default function Lending() {
                               variant="ghost"
                               size="icon"
                               className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => removeStagedItem(item.inventory_id)}
+                              onClick={() =>
+                                removeStagedItem(item.inventory_id)
+                              }
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -537,16 +598,23 @@ export default function Lending() {
                 onChange={(e) => setLendNotes(e.target.value)}
               />
             </div>
-
           </div>
 
           <DialogFooter className="pt-2 border-t mt-4">
             <Button variant="outline" onClick={() => setIsLendOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleLendBatch} disabled={isSubmitting || stagedItems.length === 0 || !selectedTechnician}>
+            <Button
+              onClick={handleLendBatch}
+              disabled={
+                isSubmitting || stagedItems.length === 0 || !selectedTechnician
+              }
+            >
               {isSubmitting ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</>
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                  Submitting...
+                </>
               ) : (
                 `Lend ${stagedItems.length} Item(s)`
               )}
@@ -556,25 +624,35 @@ export default function Lending() {
       </Dialog>
 
       {/* Action Confirmation Modal */}
-      <AlertDialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
+      <AlertDialog
+        open={!!actionTarget}
+        onOpenChange={(open) => !open && setActionTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {actionTarget?.action === 'return' ? "Return Item?" : "Mark as Consumed?"}
+              {actionTarget?.action === "return"
+                ? "Return Item?"
+                : "Mark as Consumed?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {actionTarget?.action === 'return' 
-                ? "This will mark the item as returned and place it back in stock." 
+              {actionTarget?.action === "return"
+                ? "This will mark the item as returned and place it back in stock."
                 : "This means the item was permanently installed or consumed in a repair. Its inventory status will be set to 'assigned'."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className={actionTarget?.action === 'consume' ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}
+              className={
+                actionTarget?.action === "consume"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-emerald-600 hover:bg-emerald-700"
+              }
               onClick={handleAction}
             >
-              Confirm {actionTarget?.action === 'return' ? "Return" : "Consumption"}
+              Confirm{" "}
+              {actionTarget?.action === "return" ? "Return" : "Consumption"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

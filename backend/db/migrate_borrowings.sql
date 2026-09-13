@@ -3,6 +3,8 @@ ALTER TABLE inventory_ops MODIFY COLUMN status ENUM('in_stock','assigned','fault
 ALTER TABLE inventory_rams MODIFY COLUMN status ENUM('in_stock','assigned','faulty','retired','reserved','borrowed') NOT NULL DEFAULT 'in_stock';
 ALTER TABLE inventory_storage MODIFY COLUMN status ENUM('in_stock','assigned','faulty','retired','reserved','borrowed') NOT NULL DEFAULT 'in_stock';
 ALTER TABLE inventory_network_cards MODIFY COLUMN status ENUM('in_stock','assigned','faulty','retired','reserved','borrowed') NOT NULL DEFAULT 'in_stock';
+ALTER TABLE inventory_batches MODIFY COLUMN batch_type ENUM('ops','ram','storage','network_card','flat_panel') NOT NULL;
+ALTER TABLE technician_borrowings MODIFY COLUMN component_type ENUM('ops', 'ram', 'storage', 'network_card', 'flat_panel') NOT NULL;
 
 -- Create technician_borrowings table
 CREATE TABLE IF NOT EXISTS technician_borrowings (

@@ -1125,6 +1125,7 @@ export default function SystemConfiguration() {
           <TabsTrigger value="ram">RAM Specs</TabsTrigger>
           <TabsTrigger value="storage">Storage Specs</TabsTrigger>
           <TabsTrigger value="netcards">Network Cards</TabsTrigger>
+          <TabsTrigger value="flatpanels">Flat Panels</TabsTrigger>
           <TabsTrigger value="software">Software</TabsTrigger>
         </TabsList>
 
@@ -1230,6 +1231,23 @@ export default function SystemConfiguration() {
             endpoint="/catalogs/network-card-models"
             title="Network Card Models"
             description="Wi-Fi / network card models"
+            columns={[
+              { key: "model_name", label: "Model" },
+              { key: "description", label: "Description" },
+            ]}
+            fields={[
+              { key: "model_name", label: "Model Name", required: true },
+              { key: "description", label: "Description" },
+            ]}
+          />
+        </TabsContent>
+
+        {/* Flat Panel Models */}
+        <TabsContent value="flatpanels">
+          <CatalogSection
+            endpoint="/catalogs/flat-panel-models"
+            title="Flat Panel Models"
+            description="Models available for flat panel inventory"
             columns={[
               { key: "model_name", label: "Model" },
               { key: "description", label: "Description" },

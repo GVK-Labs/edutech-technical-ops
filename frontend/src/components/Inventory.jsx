@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Cpu, HardDrive, MemoryStick, Wifi, Plus, Upload, Search,
-  RefreshCw, ChevronDown, ChevronRight, Pencil, Trash2, X,
+  Cpu,
+  HardDrive,
+  MemoryStick,
+  Wifi,
+  Monitor,
+  Plus,
+  Upload,
+  Search,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 import axios from "@/utils/axios";
 import { API_URL } from "@/lib/api";
@@ -13,23 +25,66 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 
 // ── constants ──────────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { key: "ops", label: "OPS Units", icon: Cpu, color: "text-violet-600", bg: "bg-violet-50" },
-  { key: "ram", label: "RAM", icon: MemoryStick, color: "text-sky-600", bg: "bg-sky-50" },
-  { key: "storage", label: "Storage", icon: HardDrive, color: "text-amber-600", bg: "bg-amber-50" },
-  { key: "network_card", label: "Network Cards", icon: Wifi, color: "text-emerald-600", bg: "bg-emerald-50" },
+  {
+    key: "ops",
+    label: "OPS Units",
+    icon: Cpu,
+    color: "text-violet-600",
+    bg: "bg-violet-50",
+  },
+  {
+    key: "ram",
+    label: "RAM",
+    icon: MemoryStick,
+    color: "text-sky-600",
+    bg: "bg-sky-50",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    icon: HardDrive,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+  },
+  {
+    key: "network_card",
+    label: "Network Cards",
+    icon: Wifi,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+  },
+  {
+    key: "flat_panel",
+    label: "Flat Panels",
+    icon: Monitor,
+    color: "text-orange-600",
+    bg: "bg-orange-50",
+  },
 ];
 
 const STATUS_COLORS = {
@@ -47,19 +102,24 @@ const SPEC_KEY = {
   ram: "ram_spec_id",
   storage: "storage_spec_id",
   network_card: "model_id",
+  flat_panel: "model_id",
 };
 
-const fmtCap = (gb) => gb >= 1024 ? gb / 1024 + "TB" : gb + "GB";
+const fmtCap = (gb) => (gb >= 1024 ? gb / 1024 + "TB" : gb + "GB");
 
 const specDisplay = (type, row) => {
-  if (type === "ram") return `${row.ddr_version} ${fmtCap(row.capacity_gb)}${row.bus_speed_mhz ? ` ${row.bus_speed_mhz}MHz` : ""}`;
-  if (type === "storage") return `${row.storage_type} ${row.form_factor} ${row.interface} ${fmtCap(row.capacity_gb)}`;
+  if (type === "ram")
+    return `${row.ddr_version} ${fmtCap(row.capacity_gb)}${row.bus_speed_mhz ? ` ${row.bus_speed_mhz}MHz` : ""}`;
+  if (type === "storage")
+    return `${row.storage_type} ${row.form_factor} ${row.interface} ${fmtCap(row.capacity_gb)}`;
   return row.spec_label || row.model_name || "—";
 };
 
 const specOptionLabel = (type, s) => {
-  if (type === "ram") return `${s.ddr_version} ${fmtCap(s.capacity_gb)}${s.bus_speed_mhz ? ` ${s.bus_speed_mhz}MHz` : ""}`;
-  if (type === "storage") return `${s.storage_type} ${s.form_factor} ${s.interface} ${fmtCap(s.capacity_gb)}`;
+  if (type === "ram")
+    return `${s.ddr_version} ${fmtCap(s.capacity_gb)}${s.bus_speed_mhz ? ` ${s.bus_speed_mhz}MHz` : ""}`;
+  if (type === "storage")
+    return `${s.storage_type} ${s.form_factor} ${s.interface} ${fmtCap(s.capacity_gb)}`;
   return s.model_name;
 };
 
@@ -67,53 +127,145 @@ const specOptionLabel = (type, s) => {
 
 function buildOpsTree(rows) {
   return rows.map((r) => ({
-    id: `ops-${r.spec_id}`, specId: r.spec_id, label: r.model_name,
-    in_stock: +r.in_stock, assigned: +r.assigned, faulty: +r.faulty,
-    reserved: +r.reserved, retired: +r.retired, total: +r.total,
+    id: `ops-${r.spec_id}`,
+    specId: r.spec_id,
+    label: r.model_name,
+    in_stock: +r.in_stock,
+    assigned: +r.assigned,
+    faulty: +r.faulty,
+    reserved: +r.reserved,
+    retired: +r.retired,
+    total: +r.total,
   }));
 }
 
 function buildRamTree(rows) {
   const ddrs = {};
   for (const r of rows) {
-    if (!ddrs[r.ddr_version]) ddrs[r.ddr_version] = { label: r.ddr_version, children: [], in_stock: 0, assigned: 0, faulty: 0, reserved: 0, retired: 0, total: 0 };
+    if (!ddrs[r.ddr_version])
+      ddrs[r.ddr_version] = {
+        label: r.ddr_version,
+        children: [],
+        in_stock: 0,
+        assigned: 0,
+        faulty: 0,
+        reserved: 0,
+        retired: 0,
+        total: 0,
+      };
     const d = ddrs[r.ddr_version];
-    d.children.push({ id: `ram-${r.spec_id}`, specId: r.spec_id, label: fmtCap(r.capacity_gb), in_stock: +r.in_stock, assigned: +r.assigned, faulty: +r.faulty, reserved: +r.reserved, retired: +r.retired, total: +r.total });
-    d.in_stock += +r.in_stock; d.assigned += +r.assigned; d.faulty += +r.faulty;
-    d.reserved += +r.reserved; d.retired += +r.retired; d.total += +r.total;
+    d.children.push({
+      id: `ram-${r.spec_id}`,
+      specId: r.spec_id,
+      label: fmtCap(r.capacity_gb),
+      in_stock: +r.in_stock,
+      assigned: +r.assigned,
+      faulty: +r.faulty,
+      reserved: +r.reserved,
+      retired: +r.retired,
+      total: +r.total,
+    });
+    d.in_stock += +r.in_stock;
+    d.assigned += +r.assigned;
+    d.faulty += +r.faulty;
+    d.reserved += +r.reserved;
+    d.retired += +r.retired;
+    d.total += +r.total;
   }
-  return Object.entries(ddrs).map(([k, v]) => ({ id: `ram-ddr-${k}`, label: k, ...v }));
+  return Object.entries(ddrs).map(([k, v]) => ({
+    id: `ram-ddr-${k}`,
+    label: k,
+    ...v,
+  }));
 }
 
 function buildStorageTree(rows) {
   const types = {};
   for (const r of rows) {
     const tk = r.storage_type;
-    if (!types[tk]) types[tk] = { label: tk, children: {}, in_stock: 0, assigned: 0, faulty: 0, reserved: 0, retired: 0, total: 0 };
+    if (!types[tk])
+      types[tk] = {
+        label: tk,
+        children: {},
+        in_stock: 0,
+        assigned: 0,
+        faulty: 0,
+        reserved: 0,
+        retired: 0,
+        total: 0,
+      };
     const t = types[tk];
-    t.in_stock += +r.in_stock; t.assigned += +r.assigned; t.faulty += +r.faulty;
-    t.reserved += +r.reserved; t.retired += +r.retired; t.total += +r.total;
+    t.in_stock += +r.in_stock;
+    t.assigned += +r.assigned;
+    t.faulty += +r.faulty;
+    t.reserved += +r.reserved;
+    t.retired += +r.retired;
+    t.total += +r.total;
 
     const ik = r.interface;
-    if (!t.children[ik]) t.children[ik] = { label: ik, children: {}, in_stock: 0, assigned: 0, faulty: 0, reserved: 0, retired: 0, total: 0 };
+    if (!t.children[ik])
+      t.children[ik] = {
+        label: ik,
+        children: {},
+        in_stock: 0,
+        assigned: 0,
+        faulty: 0,
+        reserved: 0,
+        retired: 0,
+        total: 0,
+      };
     const iface = t.children[ik];
-    iface.in_stock += +r.in_stock; iface.assigned += +r.assigned; iface.faulty += +r.faulty;
-    iface.reserved += +r.reserved; iface.retired += +r.retired; iface.total += +r.total;
+    iface.in_stock += +r.in_stock;
+    iface.assigned += +r.assigned;
+    iface.faulty += +r.faulty;
+    iface.reserved += +r.reserved;
+    iface.retired += +r.retired;
+    iface.total += +r.total;
 
     const fk = r.form_factor;
-    if (!iface.children[fk]) iface.children[fk] = { label: fk, children: [], in_stock: 0, assigned: 0, faulty: 0, reserved: 0, retired: 0, total: 0 };
+    if (!iface.children[fk])
+      iface.children[fk] = {
+        label: fk,
+        children: [],
+        in_stock: 0,
+        assigned: 0,
+        faulty: 0,
+        reserved: 0,
+        retired: 0,
+        total: 0,
+      };
     const ff = iface.children[fk];
-    ff.in_stock += +r.in_stock; ff.assigned += +r.assigned; ff.faulty += +r.faulty;
-    ff.reserved += +r.reserved; ff.retired += +r.retired; ff.total += +r.total;
-    ff.children.push({ id: `storage-${r.spec_id}`, specId: r.spec_id, label: fmtCap(r.capacity_gb), in_stock: +r.in_stock, assigned: +r.assigned, faulty: +r.faulty, reserved: +r.reserved, retired: +r.retired, total: +r.total });
+    ff.in_stock += +r.in_stock;
+    ff.assigned += +r.assigned;
+    ff.faulty += +r.faulty;
+    ff.reserved += +r.reserved;
+    ff.retired += +r.retired;
+    ff.total += +r.total;
+    ff.children.push({
+      id: `storage-${r.spec_id}`,
+      specId: r.spec_id,
+      label: fmtCap(r.capacity_gb),
+      in_stock: +r.in_stock,
+      assigned: +r.assigned,
+      faulty: +r.faulty,
+      reserved: +r.reserved,
+      retired: +r.retired,
+      total: +r.total,
+    });
   }
 
   return Object.entries(types).map(([tk, tv]) => ({
-    id: `storage-type-${tk}`, label: tk, ...tv,
+    id: `storage-type-${tk}`,
+    label: tk,
+    ...tv,
     children: Object.entries(tv.children).map(([ik, iv]) => ({
-      id: `storage-iface-${tk}-${ik}`, label: ik, ...iv,
+      id: `storage-iface-${tk}-${ik}`,
+      label: ik,
+      ...iv,
       children: Object.entries(iv.children).map(([fk, fv]) => ({
-        id: `storage-ff-${tk}-${ik}-${fk}`, label: fk, ...fv,
+        id: `storage-ff-${tk}-${ik}-${fk}`,
+        label: fk,
+        ...fv,
       })),
     })),
   }));
@@ -121,9 +273,29 @@ function buildStorageTree(rows) {
 
 function buildNetworkTree(rows) {
   return rows.map((r) => ({
-    id: `net-${r.spec_id}`, specId: r.spec_id, label: r.model_name,
-    in_stock: +r.in_stock, assigned: +r.assigned, faulty: +r.faulty,
-    reserved: +r.reserved, retired: +r.retired, total: +r.total,
+    id: `net-${r.spec_id}`,
+    specId: r.spec_id,
+    label: r.model_name,
+    in_stock: +r.in_stock,
+    assigned: +r.assigned,
+    faulty: +r.faulty,
+    reserved: +r.reserved,
+    retired: +r.retired,
+    total: +r.total,
+  }));
+}
+
+function buildFlatPanelTree(rows) {
+  return rows.map((r) => ({
+    id: `flat-panel-${r.spec_id}`,
+    specId: r.spec_id,
+    label: r.model_name,
+    in_stock: +r.in_stock,
+    assigned: +r.assigned,
+    faulty: +r.faulty,
+    reserved: +r.reserved,
+    retired: +r.retired,
+    total: +r.total,
   }));
 }
 
@@ -139,18 +311,32 @@ function collectSpecIds(node) {
 function StockDot({ count, color }) {
   if (!count) return null;
   return (
-    <span className={`flex items-center gap-0.5 text-[10px] font-semibold ${color}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${color.replace("text-", "bg-")}`} />
+    <span
+      className={`flex items-center gap-0.5 text-[10px] font-semibold ${color}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${color.replace("text-", "bg-")}`}
+      />
       {count}
     </span>
   );
 }
 
-function TreeNode({ node, depth = 0, activeSpecIds, onSelect, openNodes, toggleOpen }) {
+function TreeNode({
+  node,
+  depth = 0,
+  activeSpecIds,
+  onSelect,
+  openNodes,
+  toggleOpen,
+}) {
   const isLeaf = !node.children?.length;
   const isOpen = openNodes.has(node.id);
   const specIds = collectSpecIds(node);
-  const isActive = specIds.length > 0 && specIds.every((id) => activeSpecIds?.includes(id)) && activeSpecIds?.length === specIds.length;
+  const isActive =
+    specIds.length > 0 &&
+    specIds.every((id) => activeSpecIds?.includes(id)) &&
+    activeSpecIds?.length === specIds.length;
   const hasActive = specIds.some((id) => activeSpecIds?.includes(id));
 
   const indent = depth * 12;
@@ -168,7 +354,11 @@ function TreeNode({ node, depth = 0, activeSpecIds, onSelect, openNodes, toggleO
       >
         {!isLeaf ? (
           <span className="shrink-0 text-muted-foreground">
-            {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {isOpen ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
           </span>
         ) : (
           <span className="h-3 w-3 shrink-0" />
@@ -176,7 +366,9 @@ function TreeNode({ node, depth = 0, activeSpecIds, onSelect, openNodes, toggleO
         <span className="flex-1 truncate leading-tight">{node.label}</span>
         <span className="flex items-center gap-1.5 shrink-0 ml-1">
           <StockDot count={node.in_stock} color="text-emerald-600" />
-          {node.faulty > 0 && <StockDot count={node.faulty} color="text-rose-500" />}
+          {node.faulty > 0 && (
+            <StockDot count={node.faulty} color="text-rose-500" />
+          )}
         </span>
       </button>
       {!isLeaf && isOpen && (
@@ -200,11 +392,21 @@ function TreeNode({ node, depth = 0, activeSpecIds, onSelect, openNodes, toggleO
 
 // ── InventoryTree sidebar ──────────────────────────────────────────────────────
 
-function InventoryTree({ treeSummary, activeType, setActiveType, activeSpecIds, setActiveSpecIds }) {
+function InventoryTree({
+  treeSummary,
+  activeType,
+  setActiveType,
+  activeSpecIds,
+  setActiveSpecIds,
+}) {
   const [openNodes, setOpenNodes] = useState(new Set());
 
   const toggleOpen = (id) =>
-    setOpenNodes((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setOpenNodes((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
 
   // auto-open top-level nodes when type changes
   useEffect(() => {
@@ -223,7 +425,9 @@ function InventoryTree({ treeSummary, activeType, setActiveType, activeSpecIds, 
   const handleSelect = (node) => {
     const ids = collectSpecIds(node);
     if (ids.length === 0) return;
-    const same = activeSpecIds?.length === ids.length && ids.every((id) => activeSpecIds.includes(id));
+    const same =
+      activeSpecIds?.length === ids.length &&
+      ids.every((id) => activeSpecIds.includes(id));
     setActiveSpecIds(same ? null : ids);
   };
 
@@ -242,21 +446,31 @@ function InventoryTree({ treeSummary, activeType, setActiveType, activeSpecIds, 
         if (key === "ops") tree = buildOpsTree(data);
         else if (key === "ram") tree = buildRamTree(data);
         else if (key === "storage") tree = buildStorageTree(data);
+        else if (key === "flat_panel") tree = buildFlatPanelTree(data);
         else tree = buildNetworkTree(data);
 
         const totalStock = data.reduce((a, r) => a + (+r.in_stock || 0), 0);
 
         return (
-          <div key={key} className={`rounded-lg border overflow-hidden transition-all ${isActive ? "border-border shadow-sm" : "border-transparent"}`}>
+          <div
+            key={key}
+            className={`rounded-lg border overflow-hidden transition-all ${isActive ? "border-border shadow-sm" : "border-transparent"}`}
+          >
             {/* category header */}
             <button
               onClick={() => handleTypeClick(key)}
               className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors
                 ${isActive ? `${bg} ${color} font-semibold` : "hover:bg-muted/60 text-foreground font-medium"}`}
             >
-              <Icon className={`h-4 w-4 shrink-0 ${isActive ? color : "text-muted-foreground"}`} />
+              <Icon
+                className={`h-4 w-4 shrink-0 ${isActive ? color : "text-muted-foreground"}`}
+              />
               <span className="flex-1 text-sm">{label}</span>
-              <span className={`text-xs font-bold tabular-nums ${isActive ? color : "text-muted-foreground"}`}>{totalStock}</span>
+              <span
+                className={`text-xs font-bold tabular-nums ${isActive ? color : "text-muted-foreground"}`}
+              >
+                {totalStock}
+              </span>
             </button>
 
             {/* tree nodes */}
@@ -270,7 +484,9 @@ function InventoryTree({ treeSummary, activeType, setActiveType, activeSpecIds, 
                 >
                   <span className="h-3 w-3 shrink-0" />
                   <span className="flex-1">All</span>
-                  <span className="text-[10px] font-semibold text-muted-foreground">{data.reduce((a, r) => a + (+r.total || 0), 0)}</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground">
+                    {data.reduce((a, r) => a + (+r.total || 0), 0)}
+                  </span>
                 </button>
                 {tree.map((node) => (
                   <TreeNode
@@ -298,7 +514,13 @@ export default function Inventory() {
   const [activeType, setActiveType] = useState("ops");
   const [items, setItems] = useState([]);
   const [specs, setSpecs] = useState([]);
-  const [treeSummary, setTreeSummary] = useState({ ops: [], ram: [], storage: [], network_card: [] });
+  const [treeSummary, setTreeSummary] = useState({
+    ops: [],
+    ram: [],
+    storage: [],
+    network_card: [],
+    flat_panel: [],
+  });
   const [activeSpecIds, setActiveSpecIds] = useState(null); // null = all
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -324,15 +546,20 @@ export default function Inventory() {
     try {
       const res = await axios.get(`${API_URL}/inventory/${type}`);
       setItems(res.data.data || []);
-    } catch { toast.error("Failed to load inventory"); }
-    finally { setLoading(false); }
+    } catch {
+      toast.error("Failed to load inventory");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const loadSpecs = useCallback(async (type) => {
     try {
       const res = await axios.get(`${API_URL}/inventory/${type}/specs`);
       setSpecs(res.data.data || []);
-    } catch { toast.error("Failed to load specs"); }
+    } catch {
+      toast.error("Failed to load specs");
+    }
   }, []);
 
   const loadTree = useCallback(async () => {
@@ -351,67 +578,109 @@ export default function Inventory() {
     setActiveSpecIds(null);
   }, [activeType, loadItems, loadSpecs, loadTree]);
 
-  const reload = () => { loadItems(activeType); loadTree(); };
+  const reload = () => {
+    loadItems(activeType);
+    loadTree();
+  };
 
   // ── single add ───────────────────────────────────────────────────────────────
 
   const openSingle = () => {
-    setSingleForm({ spec_id: "", serial_number: "", motherboard_serial: "", brand: "", notes: "", batch_description: "" });
+    setSingleForm({
+      spec_id: "",
+      serial_number: "",
+      motherboard_serial: "",
+      brand: "",
+      notes: "",
+      batch_description: "",
+    });
     setSheetOpen(true);
   };
 
   const submitSingle = async () => {
-    if (!singleForm.spec_id || !singleForm.serial_number?.trim()) return toast.error("Spec and serial number are required");
-    if (activeType === "ops" && !singleForm.motherboard_serial?.trim()) return toast.error("Motherboard serial is required for OPS");
+    if (!singleForm.spec_id || !singleForm.serial_number?.trim())
+      return toast.error("Spec and serial number are required");
+    if (activeType === "ops" && !singleForm.motherboard_serial?.trim())
+      return toast.error("Motherboard serial is required for OPS");
     setSaving(true);
     try {
       await axios.post(`${API_URL}/inventory/${activeType}/single`, singleForm);
       toast.success("Item added");
       setSheetOpen(false);
       reload();
-    } catch (e) { toast.error(e.response?.data?.Error || "Failed to add item"); }
-    finally { setSaving(false); }
+    } catch (e) {
+      toast.error(e.response?.data?.Error || "Failed to add item");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── batch add ────────────────────────────────────────────────────────────────
 
   const openBatch = () => {
-    setBatchText(""); setBatchSpecId(""); setBatchBrand(""); setBatchDesc("");
+    setBatchText("");
+    setBatchSpecId("");
+    setBatchBrand("");
+    setBatchDesc("");
     setBatchOpen(true);
     setTimeout(() => batchRef.current?.focus(), 100);
   };
 
   const submitBatch = async () => {
     if (!batchSpecId) return toast.error("Select a spec first");
-    const lines = batchText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const lines = batchText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (!lines.length) return toast.error("Enter at least one serial number");
     const batchItems = lines.map((line) => {
       if (activeType === "ops") {
         const [serial_number, motherboard_serial] = line.split(/[\t,]/);
-        return { serial_number: serial_number?.trim(), motherboard_serial: motherboard_serial?.trim(), spec_id: batchSpecId };
+        return {
+          serial_number: serial_number?.trim(),
+          motherboard_serial: motherboard_serial?.trim(),
+          spec_id: batchSpecId,
+        };
       }
-      return { serial_number: line, spec_id: batchSpecId, brand: batchBrand || null };
+      return {
+        serial_number: line,
+        spec_id: batchSpecId,
+        brand: batchBrand || null,
+      };
     });
     setBatchSaving(true);
     try {
-      const res = await axios.post(`${API_URL}/inventory/${activeType}/batch`, { items: batchItems, batch_description: batchDesc || null });
+      const res = await axios.post(`${API_URL}/inventory/${activeType}/batch`, {
+        items: batchItems,
+        batch_description: batchDesc || null,
+      });
       const { inserted, errors } = res.data;
-      toast.success(`${inserted} item(s) added${errors?.length ? `, ${errors.length} skipped` : ""}`);
+      toast.success(
+        `${inserted} item(s) added${errors?.length ? `, ${errors.length} skipped` : ""}`,
+      );
       if (errors?.length) errors.forEach((e) => toast.warning(e));
       setBatchOpen(false);
       reload();
-    } catch (e) { toast.error(e.response?.data?.Error || "Batch import failed"); }
-    finally { setBatchSaving(false); }
+    } catch (e) {
+      toast.error(e.response?.data?.Error || "Batch import failed");
+    } finally {
+      setBatchSaving(false);
+    }
   };
 
   // ── status update ────────────────────────────────────────────────────────────
 
   const changeStatus = async (item, status) => {
     try {
-      await axios.patch(`${API_URL}/inventory/${activeType}/${item.id}/status`, { status });
+      await axios.patch(
+        `${API_URL}/inventory/${activeType}/${item.id}/status`,
+        { status },
+      );
       toast.success("Status updated");
       reload();
-    } catch (e) { toast.error(e.response?.data?.Error || "Failed to update status"); }
+    } catch (e) {
+      toast.error(e.response?.data?.Error || "Failed to update status");
+    }
   };
 
   const openEdit = (item) => {
@@ -426,38 +695,51 @@ export default function Inventory() {
   };
 
   const submitEdit = async () => {
-    if (!editForm.spec_id || !editForm.serial_number?.trim()) return toast.error("Spec and serial number are required");
-    if (activeType === "ops" && !editForm.motherboard_serial?.trim()) return toast.error("Motherboard serial is required for OPS");
+    if (!editForm.spec_id || !editForm.serial_number?.trim())
+      return toast.error("Spec and serial number are required");
+    if (activeType === "ops" && !editForm.motherboard_serial?.trim())
+      return toast.error("Motherboard serial is required for OPS");
     setEditSaving(true);
     try {
-      await axios.patch(`${API_URL}/inventory/${activeType}/${editItem.id}`, editForm);
+      await axios.patch(
+        `${API_URL}/inventory/${activeType}/${editItem.id}`,
+        editForm,
+      );
       toast.success("Inventory item updated");
       setEditItem(null);
       reload();
-    } catch (e) { toast.error(e.response?.data?.Error || "Failed to update item"); }
-    finally { setEditSaving(false); }
+    } catch (e) {
+      toast.error(e.response?.data?.Error || "Failed to update item");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const removeItem = async (item) => {
-    if (!window.confirm(`Remove ${item.serial_number}? This cannot be undone.`)) return;
+    if (!window.confirm(`Remove ${item.serial_number}? This cannot be undone.`))
+      return;
     try {
       await axios.delete(`${API_URL}/inventory/${activeType}/${item.id}`);
       toast.success("Inventory item removed");
       reload();
-    } catch (e) { toast.error(e.response?.data?.Error || "Failed to remove item"); }
+    } catch (e) {
+      toast.error(e.response?.data?.Error || "Failed to remove item");
+    }
   };
 
   // ── filtered list ────────────────────────────────────────────────────────────
 
   const filtered = items.filter((item) => {
     const q = search.toLowerCase();
-    const matchSearch = !q ||
+    const matchSearch =
+      !q ||
       item.serial_number?.toLowerCase().includes(q) ||
       (item.motherboard_serial || "").toLowerCase().includes(q) ||
       (item.brand || "").toLowerCase().includes(q) ||
       specDisplay(activeType, item).toLowerCase().includes(q);
     const matchStatus = filterStatus === "all" || item.status === filterStatus;
-    const matchSpec = !activeSpecIds || activeSpecIds.includes(item[SPEC_KEY[activeType]]);
+    const matchSpec =
+      !activeSpecIds || activeSpecIds.includes(item[SPEC_KEY[activeType]]);
     return matchSearch && matchStatus && matchSpec;
   });
 
@@ -469,15 +751,21 @@ export default function Inventory() {
   return (
     <main className="overflow-y-auto p-5">
       <div className="mx-auto max-w-7xl space-y-4">
-
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage OPS units, RAM, storage, and network cards.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Manage OPS units, RAM, storage, and network cards.
+            </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={openBatch} className="gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openBatch}
+              className="gap-1.5"
+            >
               <Upload className="h-4 w-4" /> Batch Import
             </Button>
             <Button size="sm" onClick={openSingle} className="gap-1.5">
@@ -488,7 +776,6 @@ export default function Inventory() {
 
         {/* Two-column layout */}
         <div className="flex gap-5 items-start">
-
           {/* Left: tree sidebar */}
           <InventoryTree
             treeSummary={treeSummary}
@@ -500,7 +787,6 @@ export default function Inventory() {
 
           {/* Right: table panel */}
           <div className="flex-1 min-w-0 space-y-3">
-
             {/* Stats + refresh row */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -513,13 +799,24 @@ export default function Inventory() {
                   </button>
                 )}
                 {activeSpecIds && <span className="text-border">|</span>}
-                <span className="text-emerald-600 font-medium">{totalStock} in stock</span>
+                <span className="text-emerald-600 font-medium">
+                  {totalStock} in stock
+                </span>
                 <span>·</span>
-                <span className="text-sky-600 font-medium">{totalAssigned} assigned</span>
+                <span className="text-sky-600 font-medium">
+                  {totalAssigned} assigned
+                </span>
                 <span>·</span>
-                <span className="text-rose-600 font-medium">{totalFaulty} faulty</span>
+                <span className="text-rose-600 font-medium">
+                  {totalFaulty} faulty
+                </span>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={reload}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={reload}
+              >
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -536,11 +833,15 @@ export default function Inventory() {
                 />
               </div>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   {STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                    <SelectItem key={s} value={s}>
+                      {s.replace("_", " ")}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -555,9 +856,13 @@ export default function Inventory() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Serial Number</TableHead>
-                    {activeType === "ops" && <TableHead>Motherboard Serial</TableHead>}
+                    {activeType === "ops" && (
+                      <TableHead>Motherboard Serial</TableHead>
+                    )}
                     <TableHead>Spec / Model</TableHead>
-                    {(activeType === "ram" || activeType === "storage") && <TableHead>Brand</TableHead>}
+                    {(activeType === "ram" || activeType === "storage") && (
+                      <TableHead>Brand</TableHead>
+                    )}
                     <TableHead>Batch</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -566,56 +871,105 @@ export default function Inventory() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">Loading…</TableCell>
+                      <TableCell
+                        colSpan={7}
+                        className="py-12 text-center text-muted-foreground"
+                      >
+                        Loading…
+                      </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">No items found.</TableCell>
-                    </TableRow>
-                  ) : filtered.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-sm">{item.serial_number}</TableCell>
-                      {activeType === "ops" && (
-                        <TableCell className="font-mono text-sm text-muted-foreground">{item.motherboard_serial}</TableCell>
-                      )}
-                      <TableCell className="text-sm">{specDisplay(activeType, item)}</TableCell>
-                      {(activeType === "ram" || activeType === "storage") && (
-                        <TableCell className="text-sm text-muted-foreground">{item.brand || "—"}</TableCell>
-                      )}
-                      <TableCell className="text-xs text-muted-foreground">{item.batch_description || `#${item.batch_id}`}</TableCell>
-                      <TableCell>
-                        <span className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${STATUS_COLORS[item.status] || ""}`}>
-                          {item.status?.replace("_", " ")}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {item.status !== "assigned" && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-                                  Status <ChevronDown className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {STATUSES.filter((s) => s !== item.status && s !== "assigned").map((s) => (
-                                  <DropdownMenuItem key={s} onClick={() => changeStatus(item, s)} className="capitalize text-sm">
-                                    {s.replace("_", " ")}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" disabled={item.status === "assigned"} title="Edit item" onClick={() => openEdit(item)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={item.status === "assigned"} title="Remove item" onClick={() => removeItem(item)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                      <TableCell
+                        colSpan={7}
+                        className="py-12 text-center text-muted-foreground"
+                      >
+                        No items found.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filtered.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-sm">
+                          {item.serial_number}
+                        </TableCell>
+                        {activeType === "ops" && (
+                          <TableCell className="font-mono text-sm text-muted-foreground">
+                            {item.motherboard_serial}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-sm">
+                          {specDisplay(activeType, item)}
+                        </TableCell>
+                        {(activeType === "ram" || activeType === "storage") && (
+                          <TableCell className="text-sm text-muted-foreground">
+                            {item.brand || "—"}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.batch_description || `#${item.batch_id}`}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${STATUS_COLORS[item.status] || ""}`}
+                          >
+                            {item.status?.replace("_", " ")}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {item.status !== "assigned" && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1 text-xs"
+                                  >
+                                    Status <ChevronDown className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {STATUSES.filter(
+                                    (s) =>
+                                      s !== item.status && s !== "assigned",
+                                  ).map((s) => (
+                                    <DropdownMenuItem
+                                      key={s}
+                                      onClick={() => changeStatus(item, s)}
+                                      className="capitalize text-sm"
+                                    >
+                                      {s.replace("_", " ")}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={item.status === "assigned"}
+                              title="Edit item"
+                              onClick={() => openEdit(item)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              disabled={item.status === "assigned"}
+                              title="Remove item"
+                              onClick={() => removeItem(item)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -628,63 +982,151 @@ export default function Inventory() {
         <SheetContent className="w-full sm:max-w-md flex flex-col p-0 gap-0">
           <div className="px-6 py-5 border-b">
             <div className="flex items-center gap-3">
-              {(() => { const Icon = TYPES.find((t) => t.key === activeType)?.icon; return Icon ? <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted"><Icon className="h-4 w-4 text-muted-foreground" /></div> : null; })()}
+              {(() => {
+                const Icon = TYPES.find((t) => t.key === activeType)?.icon;
+                return Icon ? (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                ) : null;
+              })()}
               <div>
-                <SheetTitle className="text-base">Add {TYPES.find((t) => t.key === activeType)?.label}</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Fill in the item details below.</p>
+                <SheetTitle className="text-base">
+                  Add {TYPES.find((t) => t.key === activeType)?.label}
+                </SheetTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Fill in the item details below.
+                </p>
               </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Specification</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Specification
+              </p>
               <div className="space-y-1.5">
-                <Label>Model / Spec <span className="text-destructive">*</span></Label>
-                <Select value={singleForm.spec_id} onValueChange={(v) => setSingleForm((f) => ({ ...f, spec_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select a spec" /></SelectTrigger>
+                <Label>
+                  Model / Spec <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={singleForm.spec_id}
+                  onValueChange={(v) =>
+                    setSingleForm((f) => ({ ...f, spec_id: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a spec" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {specs.map((s) => <SelectItem key={s.id} value={String(s.id)}>{specOptionLabel(activeType, s)}</SelectItem>)}
+                    {specs.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {specOptionLabel(activeType, s)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               {(activeType === "ram" || activeType === "storage") && (
                 <div className="space-y-1.5">
                   <Label>Brand</Label>
-                  <Input value={singleForm.brand || ""} onChange={(e) => setSingleForm((f) => ({ ...f, brand: e.target.value }))} placeholder="e.g. Samsung, Kingston" />
+                  <Input
+                    value={singleForm.brand || ""}
+                    onChange={(e) =>
+                      setSingleForm((f) => ({ ...f, brand: e.target.value }))
+                    }
+                    placeholder="e.g. Samsung, Kingston"
+                  />
                 </div>
               )}
             </div>
             <Separator />
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Serial Numbers</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Serial Numbers
+              </p>
               <div className="space-y-1.5">
-                <Label>Serial Number <span className="text-destructive">*</span></Label>
-                <Input value={singleForm.serial_number || ""} onChange={(e) => setSingleForm((f) => ({ ...f, serial_number: e.target.value }))} placeholder="Scan or type serial" className="font-mono" autoFocus />
+                <Label>
+                  Serial Number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={singleForm.serial_number || ""}
+                  onChange={(e) =>
+                    setSingleForm((f) => ({
+                      ...f,
+                      serial_number: e.target.value,
+                    }))
+                  }
+                  placeholder="Scan or type serial"
+                  className="font-mono"
+                  autoFocus
+                />
               </div>
               {activeType === "ops" && (
                 <div className="space-y-1.5">
-                  <Label>Motherboard Serial <span className="text-destructive">*</span></Label>
-                  <Input value={singleForm.motherboard_serial || ""} onChange={(e) => setSingleForm((f) => ({ ...f, motherboard_serial: e.target.value }))} placeholder="Scan or type motherboard serial" className="font-mono" />
-                  <p className="text-xs text-muted-foreground">The motherboard serial uniquely identifies the unit even if the cover is swapped.</p>
+                  <Label>
+                    Motherboard Serial{" "}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={singleForm.motherboard_serial || ""}
+                    onChange={(e) =>
+                      setSingleForm((f) => ({
+                        ...f,
+                        motherboard_serial: e.target.value,
+                      }))
+                    }
+                    placeholder="Scan or type motherboard serial"
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The motherboard serial uniquely identifies the unit even if
+                    the cover is swapped.
+                  </p>
                 </div>
               )}
             </div>
             <Separator />
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Batch & Notes</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Batch & Notes
+              </p>
               <div className="space-y-1.5">
                 <Label>Batch Description</Label>
-                <Input value={singleForm.batch_description || ""} onChange={(e) => setSingleForm((f) => ({ ...f, batch_description: e.target.value }))} placeholder="e.g. Purchase order #123" />
+                <Input
+                  value={singleForm.batch_description || ""}
+                  onChange={(e) =>
+                    setSingleForm((f) => ({
+                      ...f,
+                      batch_description: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Purchase order #123"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Notes</Label>
-                <Input value={singleForm.notes || ""} onChange={(e) => setSingleForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Optional notes about this item" />
+                <Input
+                  value={singleForm.notes || ""}
+                  onChange={(e) =>
+                    setSingleForm((f) => ({ ...f, notes: e.target.value }))
+                  }
+                  placeholder="Optional notes about this item"
+                />
               </div>
             </div>
           </div>
           <div className="border-t px-6 py-4 flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
-            <Button onClick={submitSingle} disabled={saving} className="min-w-24">{saving ? "Saving…" : "Add Item"}</Button>
+            <Button variant="outline" onClick={() => setSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitSingle}
+              disabled={saving}
+              className="min-w-24"
+            >
+              {saving ? "Saving…" : "Add Item"}
+            </Button>
           </div>
         </SheetContent>
       </Sheet>
@@ -699,65 +1141,126 @@ export default function Inventory() {
               </div>
               <div>
                 <SheetTitle className="text-base">Batch Import</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">{TYPES.find((t) => t.key === activeType)?.label} — scan or paste multiple serials.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {TYPES.find((t) => t.key === activeType)?.label} — scan or
+                  paste multiple serials.
+                </p>
               </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Specification</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Specification
+              </p>
               <div className="space-y-1.5">
-                <Label>Model / Spec <span className="text-destructive">*</span></Label>
+                <Label>
+                  Model / Spec <span className="text-destructive">*</span>
+                </Label>
                 <Select value={batchSpecId} onValueChange={setBatchSpecId}>
-                  <SelectTrigger><SelectValue placeholder="Select spec — applies to all items" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select spec — applies to all items" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {specs.map((s) => <SelectItem key={s.id} value={String(s.id)}>{specOptionLabel(activeType, s)}</SelectItem>)}
+                    {specs.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {specOptionLabel(activeType, s)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               {(activeType === "ram" || activeType === "storage") && (
                 <div className="space-y-1.5">
-                  <Label>Brand <span className="text-muted-foreground text-xs">(applies to all)</span></Label>
-                  <Input value={batchBrand} onChange={(e) => setBatchBrand(e.target.value)} placeholder="e.g. Samsung" />
+                  <Label>
+                    Brand{" "}
+                    <span className="text-muted-foreground text-xs">
+                      (applies to all)
+                    </span>
+                  </Label>
+                  <Input
+                    value={batchBrand}
+                    onChange={(e) => setBatchBrand(e.target.value)}
+                    placeholder="e.g. Samsung"
+                  />
                 </div>
               )}
             </div>
             <Separator />
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Serial Numbers</p>
-                {batchText && <span className="text-xs font-medium text-primary">{batchText.split("\n").filter((l) => l.trim()).length} item(s)</span>}
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Serial Numbers
+                </p>
+                {batchText && (
+                  <span className="text-xs font-medium text-primary">
+                    {batchText.split("\n").filter((l) => l.trim()).length}{" "}
+                    item(s)
+                  </span>
+                )}
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
                 {activeType === "ops" ? (
-                  <><p>One per line: <span className="font-mono bg-muted px-1 rounded">serial_number,motherboard_serial</span></p><p>Tab-separated also works.</p></>
+                  <>
+                    <p>
+                      One per line:{" "}
+                      <span className="font-mono bg-muted px-1 rounded">
+                        serial_number,motherboard_serial
+                      </span>
+                    </p>
+                    <p>Tab-separated also works.</p>
+                  </>
                 ) : (
-                  <p>One serial number per line. Point your barcode scanner here and scan away.</p>
+                  <p>
+                    One serial number per line. Point your barcode scanner here
+                    and scan away.
+                  </p>
                 )}
               </div>
               <Textarea
                 ref={batchRef}
                 value={batchText}
                 onChange={(e) => setBatchText(e.target.value)}
-                placeholder={activeType === "ops" ? "SN001,MB001\nSN002,MB002" : "SN001\nSN002\nSN003"}
+                placeholder={
+                  activeType === "ops"
+                    ? "SN001,MB001\nSN002,MB002"
+                    : "SN001\nSN002\nSN003"
+                }
                 rows={12}
                 className="font-mono text-sm resize-none"
               />
             </div>
             <Separator />
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Batch Info</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Batch Info
+              </p>
               <div className="space-y-1.5">
                 <Label>Batch Description</Label>
-                <Input value={batchDesc} onChange={(e) => setBatchDesc(e.target.value)} placeholder="e.g. Purchase order #123" />
+                <Input
+                  value={batchDesc}
+                  onChange={(e) => setBatchDesc(e.target.value)}
+                  placeholder="e.g. Purchase order #123"
+                />
               </div>
             </div>
           </div>
           <div className="border-t px-6 py-4 flex items-center justify-between gap-2 bg-background">
-            <p className="text-xs text-muted-foreground">{batchText.split("\n").filter((l) => l.trim()).length} serial(s) ready to import</p>
+            <p className="text-xs text-muted-foreground">
+              {batchText.split("\n").filter((l) => l.trim()).length} serial(s)
+              ready to import
+            </p>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setBatchOpen(false)}>Cancel</Button>
-              <Button onClick={submitBatch} disabled={batchSaving} className="min-w-24">{batchSaving ? "Importing…" : "Import"}</Button>
+              <Button variant="outline" onClick={() => setBatchOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={submitBatch}
+                disabled={batchSaving}
+                className="min-w-24"
+              >
+                {batchSaving ? "Importing…" : "Import"}
+              </Button>
             </div>
           </div>
         </SheetContent>

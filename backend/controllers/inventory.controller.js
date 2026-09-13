@@ -44,11 +44,20 @@ const TABLES = {
     extraPlaceholders: "",
     extraValues: () => [],
   },
+  flat_panel: {
+    inv: "inventory_flat_panels",
+    spec: "flat_panel_models",
+    specKey: "model_id",
+    specLabel: "model_name",
+    extraInsert: () => ({}),
+    extraCols: "",
+    extraPlaceholders: "",
+    extraValues: () => [],
+  },
 };
 
 const specLabel = (type, row) => {
-  if (type === "ram")
-    return `${row.ddr_version} ${row.capacity_gb}GB`;
+  if (type === "ram") return `${row.ddr_version} ${row.capacity_gb}GB`;
   if (type === "storage")
     return `${row.storage_type} ${row.form_factor} ${row.interface} ${row.capacity_gb >= 1024 ? row.capacity_gb / 1024 + "TB" : row.capacity_gb + "GB"}`;
   return row.model_name || row.spec_label || "";
@@ -63,10 +72,18 @@ const referenceTable = {
 
 const ensureUnassigned = async (conn, type, id) => {
   const t = TABLES[type];
-  const [[item]] = await conn.query(`SELECT id, status FROM ${t.inv} WHERE id=? FOR UPDATE`, [id]);
+  const [[item]] = await conn.query(
+    `SELECT id, status FROM ${t.inv} WHERE id=? FOR UPDATE`,
+    [id],
+  );
   if (!item) throw new Error("Inventory item not found");
   const ref = referenceTable[type];
-  const [[usage]] = await conn.query(`SELECT COUNT(*) AS count FROM ${ref.table} WHERE ${ref.column}=?`, [id]);
+  const [[usage]] = ref
+    ? await conn.query(
+        `SELECT COUNT(*) AS count FROM ${ref.table} WHERE ${ref.column}=?`,
+        [id],
+      )
+    : [[{ count: 0 }]];
   if (item.status === "assigned" || usage.count > 0)
     throw new Error("Assigned inventory cannot be edited or removed");
   return item;
@@ -81,9 +98,18 @@ export const getInventory = async (req, res) => {
   const { status, spec_id, batch_id } = req.query;
   const where = [];
   const params = [];
-  if (status) { where.push("i.status = ?"); params.push(status); }
-  if (spec_id) { where.push(`i.${t.specKey} = ?`); params.push(spec_id); }
-  if (batch_id) { where.push("i.batch_id = ?"); params.push(batch_id); }
+  if (status) {
+    where.push("i.status = ?");
+    params.push(status);
+  }
+  if (spec_id) {
+    where.push(`i.${t.specKey} = ?`);
+    params.push(spec_id);
+  }
+  if (batch_id) {
+    where.push("i.batch_id = ?");
+    params.push(batch_id);
+  }
 
   const whereClause = where.length ? "WHERE " + where.join(" AND ") : "";
 
@@ -99,6 +125,9 @@ export const getInventory = async (req, res) => {
     } else if (req.params.type === "ops") {
       specJoin = "LEFT JOIN ops_models s ON s.id = i.ops_model_id";
       specCols = ", s.model_name AS spec_label, s.processor_core";
+    } else if (req.params.type === "flat_panel") {
+      specJoin = "LEFT JOIN flat_panel_models s ON s.id = i.model_id";
+      specCols = ", s.model_name AS spec_label";
     } else {
       specJoin = "LEFT JOIN network_card_models s ON s.id = i.model_id";
       specCols = ", s.model_name AS spec_label";
@@ -141,10 +170,14 @@ export const addSingle = async (req, res) => {
 
   const { serial_number, spec_id, notes, batch_description } = req.body;
   if (!serial_number?.trim() || !spec_id)
-    return res.status(400).json({ Status: false, Error: "serial_number and spec_id are required" });
+    return res
+      .status(400)
+      .json({ Status: false, Error: "serial_number and spec_id are required" });
 
   if (type === "ops" && !req.body.motherboard_serial?.trim())
-    return res.status(400).json({ Status: false, Error: "motherboard_serial is required for OPS" });
+    return res
+      .status(400)
+      .json({ Status: false, Error: "motherboard_serial is required for OPS" });
 
   const conn = await pool.getConnection();
   try {
@@ -152,7 +185,11 @@ export const addSingle = async (req, res) => {
 
     const [batchResult] = await conn.query(
       "INSERT INTO inventory_batches (batch_type, description, created_by) VALUES (?,?,?)",
-      [type === "network_card" ? "network_card" : type, batch_description || null, req.user.id],
+      [
+        type === "network_card" ? "network_card" : type,
+        batch_description || null,
+        req.user.id,
+      ],
     );
     const batchId = batchResult.insertId;
 
@@ -163,12 +200,24 @@ export const addSingle = async (req, res) => {
     );
 
     await conn.commit();
-    void logAction({ userId: req.user.id, action: "inventory.item_added", entityType: `inventory_${type}`, details: { serial_number: serial_number.trim(), spec_id, batch_id: batchId }, req });
+    void logAction({
+      userId: req.user.id,
+      action: "inventory.item_added",
+      entityType: `inventory_${type}`,
+      details: {
+        serial_number: serial_number.trim(),
+        spec_id,
+        batch_id: batchId,
+      },
+      req,
+    });
     res.json({ Status: true });
   } catch (err) {
     await conn.rollback();
     if (err.code === "ER_DUP_ENTRY")
-      return res.status(400).json({ Status: false, Error: "Serial number already exists" });
+      return res
+        .status(400)
+        .json({ Status: false, Error: "Serial number already exists" });
     res.status(400).json({ Status: false, Error: err.message });
   } finally {
     conn.release();
@@ -184,7 +233,9 @@ export const addBatch = async (req, res) => {
 
   const { items, batch_description } = req.body;
   if (!Array.isArray(items) || items.length === 0)
-    return res.status(400).json({ Status: false, Error: "items array is required" });
+    return res
+      .status(400)
+      .json({ Status: false, Error: "items array is required" });
 
   const conn = await pool.getConnection();
   try {
@@ -192,7 +243,11 @@ export const addBatch = async (req, res) => {
 
     const [batchResult] = await conn.query(
       "INSERT INTO inventory_batches (batch_type, description, created_by) VALUES (?,?,?)",
-      [type === "network_card" ? "network_card" : type, batch_description || null, req.user.id],
+      [
+        type === "network_card" ? "network_card" : type,
+        batch_description || null,
+        req.user.id,
+      ],
     );
     const batchId = batchResult.insertId;
 
@@ -204,23 +259,39 @@ export const addBatch = async (req, res) => {
         continue;
       }
       if (type === "ops" && !item.motherboard_serial?.trim()) {
-        errors.push(`Skipped ${item.serial_number}: missing motherboard_serial`);
+        errors.push(
+          `Skipped ${item.serial_number}: missing motherboard_serial`,
+        );
         continue;
       }
       try {
         const extraVals = t.extraValues(item);
         await conn.query(
           `INSERT INTO ${t.inv} (serial_number, ${t.specKey}, batch_id, notes${t.extraCols}) VALUES (?,?,?,?${t.extraPlaceholders})`,
-          [item.serial_number.trim(), item.spec_id, batchId, item.notes || null, ...extraVals],
+          [
+            item.serial_number.trim(),
+            item.spec_id,
+            batchId,
+            item.notes || null,
+            ...extraVals,
+          ],
         );
         inserted++;
       } catch (e) {
-        errors.push(`${item.serial_number}: ${e.code === "ER_DUP_ENTRY" ? "duplicate" : e.message}`);
+        errors.push(
+          `${item.serial_number}: ${e.code === "ER_DUP_ENTRY" ? "duplicate" : e.message}`,
+        );
       }
     }
 
     await conn.commit();
-    void logAction({ userId: req.user.id, action: "inventory.batch_added", entityType: `inventory_${type}`, details: { batch_id: batchId, inserted, rejected: errors.length }, req });
+    void logAction({
+      userId: req.user.id,
+      action: "inventory.batch_added",
+      entityType: `inventory_${type}`,
+      details: { batch_id: batchId, inserted, rejected: errors.length },
+      req,
+    });
     res.json({ Status: true, inserted, errors });
   } catch (err) {
     await conn.rollback();
@@ -243,14 +314,26 @@ export const updateStatus = async (req, res) => {
   try {
     await conn.beginTransaction();
     await ensureUnassigned(conn, req.params.type, req.params.id);
-    await conn.query(`UPDATE ${t.inv} SET status=? WHERE id=?`, [status, req.params.id]);
+    await conn.query(`UPDATE ${t.inv} SET status=? WHERE id=?`, [
+      status,
+      req.params.id,
+    ]);
     await conn.commit();
-    void logAction({ userId: req.user.id, action: "inventory.status_updated", entityType: `inventory_${req.params.type}`, entityId: Number(req.params.id), details: { status }, req });
+    void logAction({
+      userId: req.user.id,
+      action: "inventory.status_updated",
+      entityType: `inventory_${req.params.type}`,
+      entityId: Number(req.params.id),
+      details: { status },
+      req,
+    });
     res.json({ Status: true });
   } catch (err) {
     await conn.rollback();
     res.status(400).json({ Status: false, Error: err.message });
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 };
 
 // PATCH /inventory/:type/:id — edit unassigned stock metadata only.
@@ -260,9 +343,13 @@ export const updateInventoryItem = async (req, res) => {
   if (!t) return res.status(404).json({ Status: false, Error: "Unknown type" });
   const { serial_number, spec_id, notes, brand, motherboard_serial } = req.body;
   if (!serial_number?.trim() || !spec_id)
-    return res.status(400).json({ Status: false, Error: "serial_number and spec_id are required" });
+    return res
+      .status(400)
+      .json({ Status: false, Error: "serial_number and spec_id are required" });
   if (type === "ops" && !motherboard_serial?.trim())
-    return res.status(400).json({ Status: false, Error: "motherboard_serial is required for OPS" });
+    return res
+      .status(400)
+      .json({ Status: false, Error: "motherboard_serial is required for OPS" });
 
   const conn = await pool.getConnection();
   try {
@@ -270,18 +357,39 @@ export const updateInventoryItem = async (req, res) => {
     await ensureUnassigned(conn, type, req.params.id);
     const fields = [`serial_number=?`, `${t.specKey}=?`, "notes=?"];
     const values = [serial_number.trim(), spec_id, notes?.trim() || null];
-    if (type === "ops") { fields.push("motherboard_serial=?"); values.push(motherboard_serial.trim()); }
-    if (type === "ram" || type === "storage") { fields.push("brand=?"); values.push(brand?.trim() || null); }
+    if (type === "ops") {
+      fields.push("motherboard_serial=?");
+      values.push(motherboard_serial.trim());
+    }
+    if (type === "ram" || type === "storage") {
+      fields.push("brand=?");
+      values.push(brand?.trim() || null);
+    }
     values.push(req.params.id);
-    await conn.query(`UPDATE ${t.inv} SET ${fields.join(", ")} WHERE id=?`, values);
+    await conn.query(
+      `UPDATE ${t.inv} SET ${fields.join(", ")} WHERE id=?`,
+      values,
+    );
     await conn.commit();
-    void logAction({ userId: req.user.id, action: "inventory.item_updated", entityType: `inventory_${type}`, entityId: Number(req.params.id), details: { spec_id }, req });
+    void logAction({
+      userId: req.user.id,
+      action: "inventory.item_updated",
+      entityType: `inventory_${type}`,
+      entityId: Number(req.params.id),
+      details: { spec_id },
+      req,
+    });
     res.json({ Status: true });
   } catch (err) {
     await conn.rollback();
-    const message = err.code === "ER_DUP_ENTRY" ? "Serial number already exists" : err.message;
+    const message =
+      err.code === "ER_DUP_ENTRY"
+        ? "Serial number already exists"
+        : err.message;
     res.status(400).json({ Status: false, Error: message });
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 };
 
 // DELETE /inventory/:type/:id — only unassigned, never-used items can be removed.
@@ -295,12 +403,20 @@ export const deleteInventoryItem = async (req, res) => {
     await ensureUnassigned(conn, type, req.params.id);
     await conn.query(`DELETE FROM ${t.inv} WHERE id=?`, [req.params.id]);
     await conn.commit();
-    void logAction({ userId: req.user.id, action: "inventory.item_deleted", entityType: `inventory_${type}`, entityId: Number(req.params.id), req });
+    void logAction({
+      userId: req.user.id,
+      action: "inventory.item_deleted",
+      entityType: `inventory_${type}`,
+      entityId: Number(req.params.id),
+      req,
+    });
     res.json({ Status: true });
   } catch (err) {
     await conn.rollback();
     res.status(400).json({ Status: false, Error: err.message });
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 };
 
 // ── GET /inventory/summary ────────────────────────────────────────────────────
@@ -308,13 +424,25 @@ export const deleteInventoryItem = async (req, res) => {
 export const getSummary = async (req, res) => {
   try {
     const queries = [
-      pool.query("SELECT status, COUNT(*) AS cnt FROM inventory_ops GROUP BY status"),
-      pool.query("SELECT status, COUNT(*) AS cnt FROM inventory_rams GROUP BY status"),
-      pool.query("SELECT status, COUNT(*) AS cnt FROM inventory_storage GROUP BY status"),
-      pool.query("SELECT status, COUNT(*) AS cnt FROM inventory_network_cards GROUP BY status"),
+      pool.query(
+        "SELECT status, COUNT(*) AS cnt FROM inventory_ops GROUP BY status",
+      ),
+      pool.query(
+        "SELECT status, COUNT(*) AS cnt FROM inventory_rams GROUP BY status",
+      ),
+      pool.query(
+        "SELECT status, COUNT(*) AS cnt FROM inventory_storage GROUP BY status",
+      ),
+      pool.query(
+        "SELECT status, COUNT(*) AS cnt FROM inventory_network_cards GROUP BY status",
+      ),
+      pool.query(
+        "SELECT status, COUNT(*) AS cnt FROM inventory_flat_panels GROUP BY status",
+      ),
     ];
     const results = await Promise.all(queries);
-    const toMap = (rows) => Object.fromEntries(rows.map((r) => [r.status, r.cnt]));
+    const toMap = (rows) =>
+      Object.fromEntries(rows.map((r) => [r.status, r.cnt]));
     res.json({
       Status: true,
       data: {
@@ -322,6 +450,7 @@ export const getSummary = async (req, res) => {
         ram: toMap(results[1][0]),
         storage: toMap(results[2][0]),
         network_card: toMap(results[3][0]),
+        flat_panel: toMap(results[4][0]),
       },
     });
   } catch (err) {
@@ -333,41 +462,54 @@ export const getSummary = async (req, res) => {
 
 export const getTreeSummary = async (req, res) => {
   try {
-    const [[ops], [ram], [storage], [network]] = await Promise.all([
-      pool.query(
-        `SELECT s.id AS spec_id, s.model_name,
+    const [[ops], [ram], [storage], [network], [flatPanel]] = await Promise.all(
+      [
+        pool.query(
+          `SELECT s.id AS spec_id, s.model_name,
           SUM(i.status='in_stock') AS in_stock, SUM(i.status='assigned') AS assigned,
           SUM(i.status='reserved') AS reserved, SUM(i.status='faulty') AS faulty,
           SUM(i.status='retired') AS retired, COUNT(*) AS total
          FROM inventory_ops i JOIN ops_models s ON s.id=i.ops_model_id
-         GROUP BY s.id ORDER BY s.model_name`
-      ),
-      pool.query(
-        `SELECT s.id AS spec_id, s.ddr_version, s.capacity_gb,
+         GROUP BY s.id ORDER BY s.model_name`,
+        ),
+        pool.query(
+          `SELECT s.id AS spec_id, s.ddr_version, s.capacity_gb,
           SUM(i.status='in_stock') AS in_stock, SUM(i.status='assigned') AS assigned,
           SUM(i.status='reserved') AS reserved, SUM(i.status='faulty') AS faulty,
           SUM(i.status='retired') AS retired, COUNT(*) AS total
          FROM inventory_rams i JOIN ram_specs s ON s.id=i.ram_spec_id
-         GROUP BY s.id ORDER BY s.ddr_version, s.capacity_gb`
-      ),
-      pool.query(
-        `SELECT s.id AS spec_id, s.storage_type, s.interface, s.form_factor, s.capacity_gb,
+         GROUP BY s.id ORDER BY s.ddr_version, s.capacity_gb`,
+        ),
+        pool.query(
+          `SELECT s.id AS spec_id, s.storage_type, s.interface, s.form_factor, s.capacity_gb,
           SUM(i.status='in_stock') AS in_stock, SUM(i.status='assigned') AS assigned,
           SUM(i.status='reserved') AS reserved, SUM(i.status='faulty') AS faulty,
           SUM(i.status='retired') AS retired, COUNT(*) AS total
          FROM inventory_storage i JOIN storage_specs s ON s.id=i.storage_spec_id
-         GROUP BY s.id ORDER BY s.storage_type, s.interface, s.form_factor, s.capacity_gb`
-      ),
-      pool.query(
-        `SELECT s.id AS spec_id, s.model_name,
+         GROUP BY s.id ORDER BY s.storage_type, s.interface, s.form_factor, s.capacity_gb`,
+        ),
+        pool.query(
+          `SELECT s.id AS spec_id, s.model_name,
           SUM(i.status='in_stock') AS in_stock, SUM(i.status='assigned') AS assigned,
           SUM(i.status='reserved') AS reserved, SUM(i.status='faulty') AS faulty,
           SUM(i.status='retired') AS retired, COUNT(*) AS total
          FROM inventory_network_cards i JOIN network_card_models s ON s.id=i.model_id
-         GROUP BY s.id ORDER BY s.model_name`
-      ),
-    ]);
-    res.json({ Status: true, data: { ops, ram, storage, network_card: network } });
+         GROUP BY s.id ORDER BY s.model_name`,
+        ),
+        pool.query(
+          `SELECT s.id AS spec_id, s.model_name,
+          SUM(i.status='in_stock') AS in_stock, SUM(i.status='assigned') AS assigned,
+          SUM(i.status='reserved') AS reserved, SUM(i.status='faulty') AS faulty,
+          SUM(i.status='retired') AS retired, COUNT(*) AS total
+         FROM inventory_flat_panels i JOIN flat_panel_models s ON s.id=i.model_id
+         GROUP BY s.id ORDER BY s.model_name`,
+        ),
+      ],
+    );
+    res.json({
+      Status: true,
+      data: { ops, ram, storage, network_card: network, flat_panel: flatPanel },
+    });
   } catch (err) {
     res.status(500).json({ Status: false, Error: err.message });
   }
@@ -384,19 +526,28 @@ export const getSpecSummary = async (req, res) => {
     let specJoin, specCols, groupCol;
     if (type === "ram") {
       specJoin = "JOIN ram_specs s ON s.id = i.ram_spec_id";
-      specCols = "s.id AS spec_id, s.ddr_version, s.capacity_gb, s.bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, NULL AS model_name, NULL AS processor_core";
+      specCols =
+        "s.id AS spec_id, s.ddr_version, s.capacity_gb, s.bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, NULL AS model_name, NULL AS processor_core";
       groupCol = "s.id";
     } else if (type === "storage") {
       specJoin = "JOIN storage_specs s ON s.id = i.storage_spec_id";
-      specCols = "s.id AS spec_id, NULL AS ddr_version, s.capacity_gb, NULL AS bus_speed_mhz, s.storage_type, s.form_factor, s.interface, NULL AS model_name, NULL AS processor_core";
+      specCols =
+        "s.id AS spec_id, NULL AS ddr_version, s.capacity_gb, NULL AS bus_speed_mhz, s.storage_type, s.form_factor, s.interface, NULL AS model_name, NULL AS processor_core";
       groupCol = "s.id";
     } else if (type === "ops") {
       specJoin = "JOIN ops_models s ON s.id = i.ops_model_id";
-      specCols = "s.id AS spec_id, NULL AS ddr_version, NULL AS capacity_gb, NULL AS bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, s.model_name, s.processor_core";
+      specCols =
+        "s.id AS spec_id, NULL AS ddr_version, NULL AS capacity_gb, NULL AS bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, s.model_name, s.processor_core";
+      groupCol = "s.id";
+    } else if (type === "flat_panel") {
+      specJoin = "JOIN flat_panel_models s ON s.id = i.model_id";
+      specCols =
+        "s.id AS spec_id, NULL AS ddr_version, NULL AS capacity_gb, NULL AS bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, s.model_name, NULL AS processor_core";
       groupCol = "s.id";
     } else {
       specJoin = "JOIN network_card_models s ON s.id = i.model_id";
-      specCols = "s.id AS spec_id, NULL AS ddr_version, NULL AS capacity_gb, NULL AS bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, s.model_name, NULL AS processor_core";
+      specCols =
+        "s.id AS spec_id, NULL AS ddr_version, NULL AS capacity_gb, NULL AS bus_speed_mhz, NULL AS storage_type, NULL AS form_factor, NULL AS interface, s.model_name, NULL AS processor_core";
       groupCol = "s.id";
     }
 

@@ -91,6 +91,47 @@ async function seedOpsSpecs(conn) {
   );
 }
 
+async function ensureTimestampColumns(conn) {
+  const tables = [
+    "provinces",
+    "districts",
+    "ram_specs",
+    "storage_specs",
+    "main_software_catalog",
+    "additional_software_catalog",
+    "inventory_batches",
+    "job_storage_requirements",
+    "job_main_software_requirements",
+    "job_additional_software",
+    "assembly_rams",
+    "assembly_storage",
+    "assembly_main_software",
+    "assembly_additional_software",
+    "repair_component_replacements",
+    "ops_replacements",
+    "technician_borrowings",
+  ];
+
+  for (const table of tables) {
+    const [columns] = await conn.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [table],
+    );
+    const existing = new Set(columns.map((column) => column.COLUMN_NAME));
+    if (!existing.has("created_at")) {
+      await conn.query(
+        `ALTER TABLE ${table} ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+      );
+    }
+    if (!existing.has("updated_at")) {
+      await conn.query(
+        `ALTER TABLE ${table} ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+      );
+    }
+  }
+}
+
 async function autoInitialize() {
   const dbName = process.env.DB_NAME || "smartboard_ops_management";
 
@@ -159,10 +200,47 @@ async function autoInitialize() {
         msg: "Updated inventory_network_cards status ENUM",
       },
       {
+        sql: "ALTER TABLE inventory_batches MODIFY COLUMN batch_type ENUM('ops','ram','storage','network_card','flat_panel') NOT NULL",
+        msg: "Updated inventory batch types",
+      },
+      {
+        sql: "ALTER TABLE repair_component_replacements MODIFY COLUMN component_type ENUM('ops','ram','storage','wifi_card','flat_panel','software_key') NOT NULL",
+        msg: "Updated replacement component types",
+      },
+      {
+        sql: "ALTER TABLE technician_borrowings MODIFY COLUMN component_type ENUM('ops','ram','storage','network_card','flat_panel') NOT NULL",
+        msg: "Updated borrowing component types",
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS flat_panel_models (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    model_name VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(150) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB`,
+        msg: "Created flat panel model catalog",
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS inventory_flat_panels (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    serial_number VARCHAR(100) NOT NULL UNIQUE,
+    model_id INT UNSIGNED NOT NULL,
+    status ENUM('in_stock','assigned','faulty','retired','reserved','borrowed') NOT NULL DEFAULT 'in_stock',
+    batch_id INT UNSIGNED NULL,
+    notes TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_flat_panel_batch FOREIGN KEY (batch_id) REFERENCES inventory_batches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_flat_panel_model FOREIGN KEY (model_id) REFERENCES flat_panel_models(id)
+) ENGINE=InnoDB`,
+        msg: "Created flat panel inventory",
+      },
+      {
         sql: `CREATE TABLE IF NOT EXISTS technician_borrowings (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     technician_id INT UNSIGNED NOT NULL,
-    component_type ENUM('ops', 'ram', 'storage', 'network_card') NOT NULL,
+    component_type ENUM('ops', 'ram', 'storage', 'network_card', 'flat_panel') NOT NULL,
     inventory_id INT UNSIGNED NOT NULL,
     borrowed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     returned_at DATETIME NULL,
@@ -190,6 +268,8 @@ async function autoInitialize() {
               UPDATE inventory_storage SET status = 'faulty' WHERE id = NEW.old_inventory_id;
           ELSEIF NEW.component_type = 'wifi_card' AND NEW.old_inventory_id IS NOT NULL THEN
               UPDATE inventory_network_cards SET status = 'faulty' WHERE id = NEW.old_inventory_id;
+            ELSEIF NEW.component_type = 'flat_panel' AND NEW.old_inventory_id IS NOT NULL THEN
+              UPDATE inventory_flat_panels SET status = 'faulty' WHERE id = NEW.old_inventory_id;
           ELSEIF NEW.component_type = 'software_key' AND NEW.old_inventory_id IS NOT NULL THEN
               UPDATE main_software_keys SET status = 'revoked' WHERE id = NEW.old_inventory_id;
           END IF;
@@ -203,6 +283,8 @@ async function autoInitialize() {
               UPDATE inventory_storage SET status = 'assigned' WHERE id = NEW.new_inventory_id;
           ELSEIF NEW.component_type = 'wifi_card' AND NEW.new_inventory_id IS NOT NULL THEN
               UPDATE inventory_network_cards SET status = 'assigned' WHERE id = NEW.new_inventory_id;
+            ELSEIF NEW.component_type = 'flat_panel' AND NEW.new_inventory_id IS NOT NULL THEN
+              UPDATE inventory_flat_panels SET status = 'assigned' WHERE id = NEW.new_inventory_id;
           ELSEIF NEW.component_type = 'software_key' AND NEW.new_inventory_id IS NOT NULL THEN
               UPDATE main_software_keys SET status = 'assigned' WHERE id = NEW.new_inventory_id;
           END IF;
@@ -242,6 +324,7 @@ async function autoInitialize() {
     await ensureTriggers(conn, schema);
     await seedLocations(conn);
     await seedOpsSpecs(conn);
+    await ensureTimestampColumns(conn);
     await conn.query(
       "ALTER TABLE jobs MODIFY job_type ENUM('smartboard','ops','both') NOT NULL DEFAULT 'both'",
     );
@@ -285,6 +368,7 @@ async function autoInitialize() {
   console.log("✅ Database schema initialised successfully");
   await seedLocations(conn);
   await seedOpsSpecs(conn);
+  await ensureTimestampColumns(conn);
   try {
     await conn.query(
       "ALTER TABLE jobs ADD COLUMN job_type ENUM('new','service') NOT NULL DEFAULT 'new' AFTER job_number",

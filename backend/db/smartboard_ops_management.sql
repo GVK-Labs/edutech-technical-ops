@@ -27,7 +27,9 @@ CREATE TABLE users (
 -- =====================================================
 CREATE TABLE provinces (
     id      TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name    VARCHAR(50) NOT NULL UNIQUE
+    name    VARCHAR(50) NOT NULL UNIQUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- =====================================================
@@ -37,6 +39,8 @@ CREATE TABLE districts (
     id          TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(50) NOT NULL,
     province_id TINYINT UNSIGNED NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_district_name_province (name, province_id),
     CONSTRAINT fk_districts_province FOREIGN KEY (province_id) REFERENCES provinces(id)
 ) ENGINE=InnoDB;
@@ -93,6 +97,8 @@ CREATE TABLE ram_specs (
     ddr_version VARCHAR(10) NOT NULL,
     capacity_gb SMALLINT UNSIGNED NOT NULL,
     description VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_ram_spec (ddr_version, capacity_gb)
 ) ENGINE=InnoDB;
 
@@ -105,6 +111,8 @@ CREATE TABLE storage_specs (
     interface    VARCHAR(20) NOT NULL,
     storage_type ENUM('SSD','HDD') NOT NULL,
     capacity_gb  INT UNSIGNED NOT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     description  VARCHAR(100) NULL,
     UNIQUE KEY uq_storage_spec (form_factor, interface, storage_type, capacity_gb)
 ) ENGINE=InnoDB;
@@ -129,6 +137,8 @@ CREATE TABLE main_software_catalog (
     name          VARCHAR(100) NOT NULL,
     version       VARCHAR(50)  NULL,
     description   TEXT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_main_sw (software_type, name, version)
 ) ENGINE=InnoDB;
 
@@ -140,6 +150,8 @@ CREATE TABLE additional_software_catalog (
     name        VARCHAR(100) NOT NULL,
     version     VARCHAR(50)  NULL,
     description TEXT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_add_sw (name, version)
 ) ENGINE=InnoDB;
 
@@ -148,10 +160,11 @@ CREATE TABLE additional_software_catalog (
 -- =====================================================
 CREATE TABLE inventory_batches (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    batch_type   ENUM('ops','ram','storage','network_card') NOT NULL,
+    batch_type   ENUM('ops','ram','storage','network_card','flat_panel') NOT NULL,
     description  VARCHAR(255) NULL,
     created_by   INT UNSIGNED NULL,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_batches_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
@@ -223,6 +236,33 @@ CREATE TABLE inventory_network_cards (
 ) ENGINE=InnoDB;
 
 -- =====================================================
+-- 17. FLAT PANEL MODEL CATALOG
+-- =====================================================
+CREATE TABLE flat_panel_models (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    model_name  VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(150) NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- =====================================================
+-- 18. INVENTORY: FLAT PANELS
+-- =====================================================
+CREATE TABLE inventory_flat_panels (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    serial_number VARCHAR(100) NOT NULL UNIQUE,
+    model_id      INT UNSIGNED NOT NULL,
+    status        ENUM('in_stock','assigned','faulty','retired','reserved','borrowed') NOT NULL DEFAULT 'in_stock',
+    batch_id      INT UNSIGNED NULL,
+    notes         TEXT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_flat_panel_batch FOREIGN KEY (batch_id) REFERENCES inventory_batches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_flat_panel_model FOREIGN KEY (model_id) REFERENCES flat_panel_models(id)
+) ENGINE=InnoDB;
+
+-- =====================================================
 -- 17. MAIN SOFTWARE KEYS
 -- =====================================================
 CREATE TABLE main_software_keys (
@@ -273,6 +313,8 @@ CREATE TABLE job_storage_requirements (
     job_id          INT UNSIGNED NOT NULL,
     storage_spec_id INT UNSIGNED NOT NULL,
     role            ENUM('primary','secondary','tertiary','additional') NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_job_storage_role (job_id, role),
     CONSTRAINT fk_job_storage_job  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
     CONSTRAINT fk_job_storage_spec FOREIGN KEY (storage_spec_id) REFERENCES storage_specs(id)
@@ -285,6 +327,8 @@ CREATE TABLE job_main_software_requirements (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     job_id              INT UNSIGNED NOT NULL,
     software_catalog_id INT UNSIGNED NOT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_job_main_sw (job_id, software_catalog_id),
     CONSTRAINT fk_job_main_sw_job      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
     CONSTRAINT fk_job_main_sw_software FOREIGN KEY (software_catalog_id) REFERENCES main_software_catalog(id)
@@ -297,6 +341,8 @@ CREATE TABLE job_additional_software (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     job_id      INT UNSIGNED NOT NULL,
     software_id INT UNSIGNED NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_job_add_sw (job_id, software_id),
     CONSTRAINT fk_job_add_sw_job      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
     CONSTRAINT fk_job_add_sw_software FOREIGN KEY (software_id) REFERENCES additional_software_catalog(id) ON DELETE CASCADE
@@ -333,6 +379,8 @@ CREATE TABLE assembly_rams (
     id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     assembled_unit_id  INT UNSIGNED NOT NULL,
     ram_inventory_id   INT UNSIGNED NOT NULL,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_asm_ram (assembled_unit_id, ram_inventory_id),
     CONSTRAINT fk_asm_ram_unit FOREIGN KEY (assembled_unit_id) REFERENCES assembled_units(id) ON DELETE CASCADE,
     CONSTRAINT fk_asm_ram_inv  FOREIGN KEY (ram_inventory_id) REFERENCES inventory_rams(id)
@@ -347,6 +395,8 @@ CREATE TABLE assembly_storage (
     storage_inventory_id  INT UNSIGNED NOT NULL,
     role                  ENUM('primary','secondary','tertiary','additional') NOT NULL DEFAULT 'additional',
     notes                 TEXT NULL,
+    created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_asm_storage (assembled_unit_id, storage_inventory_id),
     CONSTRAINT fk_asm_storage_unit FOREIGN KEY (assembled_unit_id) REFERENCES assembled_units(id) ON DELETE CASCADE,
     CONSTRAINT fk_asm_storage_inv  FOREIGN KEY (storage_inventory_id) REFERENCES inventory_storage(id)
@@ -364,6 +414,8 @@ CREATE TABLE assembly_main_software (
     assigned_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     unassigned_at       DATETIME NULL,
     notes               TEXT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_asm_main_sw_active (assembled_unit_id, software_catalog_id, is_active),
     CONSTRAINT fk_asm_main_sw_unit     FOREIGN KEY (assembled_unit_id) REFERENCES assembled_units(id) ON DELETE CASCADE,
     CONSTRAINT fk_asm_main_sw_catalog  FOREIGN KEY (software_catalog_id) REFERENCES main_software_catalog(id),
@@ -378,6 +430,8 @@ CREATE TABLE assembly_additional_software (
     assembled_unit_id  INT UNSIGNED NOT NULL,
     software_id        INT UNSIGNED NOT NULL,
     installed_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_asm_add_sw (assembled_unit_id, software_id),
     CONSTRAINT fk_asm_add_sw_unit     FOREIGN KEY (assembled_unit_id) REFERENCES assembled_units(id) ON DELETE CASCADE,
     CONSTRAINT fk_asm_add_sw_software FOREIGN KEY (software_id) REFERENCES additional_software_catalog(id) ON DELETE CASCADE
@@ -410,12 +464,14 @@ CREATE TABLE repair_jobs (
 CREATE TABLE repair_component_replacements (
     id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     repair_job_id     INT UNSIGNED NOT NULL,
-    component_type    ENUM('ops','ram','storage','wifi_card','software_key') NOT NULL,
+    component_type    ENUM('ops','ram','storage','wifi_card','flat_panel','software_key') NOT NULL,
     old_inventory_id  INT UNSIGNED NULL COMMENT 'ID in corresponding inventory table or software_keys',
     new_inventory_id  INT UNSIGNED NULL,
     replacement_date  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     technician_id     INT UNSIGNED NULL,
     notes             TEXT NULL,
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_rep_replace_job FOREIGN KEY (repair_job_id) REFERENCES repair_jobs(id) ON DELETE CASCADE,
     CONSTRAINT fk_rep_replace_tech FOREIGN KEY (technician_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_rep_replace_type (component_type),
@@ -436,6 +492,8 @@ CREATE TABLE ops_replacements (
     status                          ENUM('assigned','returned','permanent') NOT NULL DEFAULT 'assigned',
     technician_id                   INT UNSIGNED NULL,
     notes                           TEXT NULL,
+    created_at                      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_ops_repl_unit   FOREIGN KEY (original_assembled_unit_id) REFERENCES assembled_units(id),
     CONSTRAINT fk_ops_repl_ops    FOREIGN KEY (replacement_ops_inventory_id) REFERENCES inventory_ops(id),
     CONSTRAINT fk_ops_repl_tech   FOREIGN KEY (technician_id) REFERENCES users(id) ON DELETE SET NULL
@@ -447,12 +505,14 @@ CREATE TABLE ops_replacements (
 CREATE TABLE technician_borrowings (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     technician_id INT UNSIGNED NOT NULL,
-    component_type ENUM('ops', 'ram', 'storage', 'network_card') NOT NULL,
+    component_type ENUM('ops', 'ram', 'storage', 'network_card', 'flat_panel') NOT NULL,
     inventory_id INT UNSIGNED NOT NULL,
     borrowed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     returned_at DATETIME NULL,
     status ENUM('borrowed', 'returned', 'consumed') NOT NULL DEFAULT 'borrowed',
     notes TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_borrowings_technician FOREIGN KEY (technician_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -553,6 +613,8 @@ BEGIN
         UPDATE inventory_storage SET status = 'faulty' WHERE id = NEW.old_inventory_id;
     ELSEIF NEW.component_type = 'wifi_card' AND NEW.old_inventory_id IS NOT NULL THEN
         UPDATE inventory_network_cards SET status = 'faulty' WHERE id = NEW.old_inventory_id;
+    ELSEIF NEW.component_type = 'flat_panel' AND NEW.old_inventory_id IS NOT NULL THEN
+        UPDATE inventory_flat_panels SET status = 'faulty' WHERE id = NEW.old_inventory_id;
     ELSEIF NEW.component_type = 'software_key' AND NEW.old_inventory_id IS NOT NULL THEN
         UPDATE main_software_keys SET status = 'revoked' WHERE id = NEW.old_inventory_id;
     END IF;
@@ -566,6 +628,8 @@ BEGIN
         UPDATE inventory_storage SET status = 'assigned' WHERE id = NEW.new_inventory_id;
     ELSEIF NEW.component_type = 'wifi_card' AND NEW.new_inventory_id IS NOT NULL THEN
         UPDATE inventory_network_cards SET status = 'assigned' WHERE id = NEW.new_inventory_id;
+    ELSEIF NEW.component_type = 'flat_panel' AND NEW.new_inventory_id IS NOT NULL THEN
+        UPDATE inventory_flat_panels SET status = 'assigned' WHERE id = NEW.new_inventory_id;
     ELSEIF NEW.component_type = 'software_key' AND NEW.new_inventory_id IS NOT NULL THEN
         UPDATE main_software_keys SET status = 'assigned' WHERE id = NEW.new_inventory_id;
     END IF;

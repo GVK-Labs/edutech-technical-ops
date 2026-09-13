@@ -178,6 +178,17 @@ const CATALOGS = {
       [b.model_name, b.description || null, id],
     ],
   },
+  "flat-panel-models": {
+    table: "flat_panel_models",
+    insert: (b) => [
+      "INSERT INTO flat_panel_models (model_name, description) VALUES (?,?)",
+      [b.model_name, b.description || null],
+    ],
+    update: (b, id) => [
+      "UPDATE flat_panel_models SET model_name=?, description=? WHERE id=?",
+      [b.model_name, b.description || null, id],
+    ],
+  },
   "main-software": {
     table: "main_software_catalog",
     insert: (b) => [

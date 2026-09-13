@@ -21,6 +21,8 @@ export const getOperationsOverview = async (req, res) => {
             SELECT status, COUNT(*) AS total FROM inventory_storage GROUP BY status
             UNION ALL
             SELECT status, COUNT(*) AS total FROM inventory_network_cards GROUP BY status
+            UNION ALL
+            SELECT status, COUNT(*) AS total FROM inventory_flat_panels GROUP BY status
           ) inventory
           GROUP BY status
         `),
@@ -34,9 +36,11 @@ export const getOperationsOverview = async (req, res) => {
             SELECT 'Storage' AS component_type FROM inventory_storage
             UNION ALL
             SELECT 'Network cards' AS component_type FROM inventory_network_cards
+            UNION ALL
+            SELECT 'Flat panels' AS component_type FROM inventory_flat_panels
           ) components
           GROUP BY component_type
-          ORDER BY FIELD(component_type, 'OPS', 'RAM', 'Storage', 'Network cards')
+          ORDER BY FIELD(component_type, 'OPS', 'RAM', 'Storage', 'Network cards', 'Flat panels')
         `),
       pool.query(
         "SELECT status, COUNT(*) AS count FROM repair_jobs GROUP BY status",
