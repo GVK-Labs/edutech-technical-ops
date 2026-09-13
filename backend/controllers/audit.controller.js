@@ -1,6 +1,17 @@
 import pool from "../config/db.config.js";
 import os from "os";
 
+const visibleAuditWhere = (alias) => `
+  ${alias}.action <> 'audit.viewed'
+  AND (
+    ${alias}.user_id IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM users audit_actor
+      WHERE audit_actor.id = ${alias}.user_id
+        AND audit_actor.role = 'auditor'
+    )
+  )`;
+
 let previousCpuSample = null;
 
 const getServerPerformance = (dbLatencyMs) => {
@@ -75,11 +86,13 @@ export const getAuditOverview = async (req, res) => {
           SUM(CASE WHEN created_at >= NOW() - INTERVAL 1 HOUR THEN 1 ELSE 0 END) AS last_hour,
           COUNT(DISTINCT user_id) AS actors,
           COUNT(DISTINCT entity_type) AS entities
-        FROM audit_logs`),
+        FROM audit_logs al
+        WHERE ${visibleAuditWhere("al")}`),
       pool.query(`
         SELECT action, COUNT(*) AS count
         FROM audit_logs
         WHERE created_at >= NOW() - INTERVAL 24 HOUR
+          AND ${visibleAuditWhere("audit_logs")}
         GROUP BY action
         ORDER BY count DESC
         LIMIT 8`),
@@ -87,6 +100,7 @@ export const getAuditOverview = async (req, res) => {
         SELECT COALESCE(entity_type, 'system') AS entity_type, COUNT(*) AS count
         FROM audit_logs
         WHERE created_at >= NOW() - INTERVAL 24 HOUR
+          AND ${visibleAuditWhere("audit_logs")}
         GROUP BY COALESCE(entity_type, 'system')
         ORDER BY count DESC
         LIMIT 8`),
@@ -95,6 +109,7 @@ export const getAuditOverview = async (req, res) => {
         FROM audit_logs al
         LEFT JOIN users u ON u.id = al.user_id
         WHERE al.created_at >= NOW() - INTERVAL 24 HOUR
+          AND ${visibleAuditWhere("al")}
         GROUP BY COALESCE(u.full_name, 'System')
         ORDER BY count DESC
         LIMIT 8`),
@@ -102,6 +117,7 @@ export const getAuditOverview = async (req, res) => {
         SELECT DATE_FORMAT(created_at, '%H:00') AS hour, COUNT(*) AS count
         FROM audit_logs
         WHERE created_at >= NOW() - INTERVAL 24 HOUR
+          AND ${visibleAuditWhere("audit_logs")}
         GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d %H'), DATE_FORMAT(created_at, '%H:00')
         ORDER BY MIN(created_at)`),
     ]);
@@ -129,8 +145,6 @@ export const getAuditOverview = async (req, res) => {
     res.status(500).json({ Status: false, Error: err.message });
   }
 };
-import { logAction } from "../utils/audit.js";
-
 // GET /audit/logs — accessible only through the isolated auditor role
 export const getAuditLogs = async (req, res) => {
   const {
@@ -164,14 +178,16 @@ export const getAuditLogs = async (req, res) => {
     where.push("DATE(al.created_at) <= ?");
     params.push(to);
   }
-  const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const visibleWhere = where.length
+    ? `WHERE ${where.join(" AND ")} AND ${visibleAuditWhere("al")}`
+    : `WHERE ${visibleAuditWhere("al")}`;
   const pageNumber = Math.max(Number(page) || 1, 1);
   const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 100);
 
   try {
     if (!(await requireAuditVisibility(res))) return;
     const [[{ total }]] = await pool.query(
-      `SELECT COUNT(*) AS total FROM audit_logs al ${whereClause}`,
+      `SELECT COUNT(*) AS total FROM audit_logs al ${visibleWhere}`,
       params,
     );
     const [rows] = await pool.query(
@@ -179,7 +195,7 @@ export const getAuditLogs = async (req, res) => {
       SELECT al.*, u.username, u.full_name, u.role
       FROM audit_logs al
       LEFT JOIN users u ON u.id = al.user_id
-      ${whereClause}
+      ${visibleWhere}
       ORDER BY al.id DESC
       LIMIT ? OFFSET ?`,
       [...params, pageSize, (pageNumber - 1) * pageSize],
@@ -188,13 +204,6 @@ export const getAuditLogs = async (req, res) => {
       Status: true,
       data: rows,
       pagination: { page: pageNumber, limit: pageSize, total },
-    });
-    void logAction({
-      userId: req.user.id,
-      action: "audit.viewed",
-      entityType: "audit_log",
-      details: { page: pageNumber },
-      req,
     });
   } catch (err) {
     res.status(500).json({ Status: false, Error: err.message });
@@ -205,12 +214,18 @@ export const getAuditFilterOptions = async (req, res) => {
   try {
     if (!(await requireAuditVisibility(res))) return;
     const [actions, entities, users] = await Promise.all([
-      pool.query("SELECT DISTINCT action FROM audit_logs ORDER BY action"),
       pool.query(
-        "SELECT DISTINCT entity_type FROM audit_logs WHERE entity_type IS NOT NULL ORDER BY entity_type",
+        `SELECT DISTINCT action FROM audit_logs al WHERE ${visibleAuditWhere("al")} ORDER BY action`,
       ),
       pool.query(
-        "SELECT DISTINCT u.id, u.full_name, u.username FROM audit_logs al JOIN users u ON u.id=al.user_id ORDER BY u.full_name",
+        `SELECT DISTINCT entity_type FROM audit_logs al WHERE entity_type IS NOT NULL AND ${visibleAuditWhere("al")} ORDER BY entity_type`,
+      ),
+      pool.query(
+        `SELECT DISTINCT u.id, u.full_name, u.username
+         FROM audit_logs al
+         JOIN users u ON u.id=al.user_id
+         WHERE ${visibleAuditWhere("al")}
+         ORDER BY u.full_name`,
       ),
     ]);
     res.json({
