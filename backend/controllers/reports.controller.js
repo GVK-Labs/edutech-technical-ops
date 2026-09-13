@@ -1,6 +1,6 @@
-import pool from '../config/db.config.js';
-import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
+import pool from "../config/db.config.js";
+import ExcelJS from "exceljs";
+import PDFDocument from "pdfkit";
 
 const getAssemblyDetailsQuery = `
   SELECT 
@@ -39,13 +39,144 @@ const getAssemblyDetailsQuery = `
   ORDER BY au.assembly_completed_at DESC
 `;
 
+const inventorySheets = [
+  {
+    name: "OPS Inventory",
+    source: "inventory_ops",
+    query: `SELECT i.id, i.serial_number, i.motherboard_serial, s.model_name,
+      s.processor_series, s.processor_core, i.status, i.batch_id,
+      b.description AS batch_description, i.notes, i.created_at, i.updated_at
+      FROM inventory_ops i
+      JOIN ops_models s ON s.id = i.ops_model_id
+      LEFT JOIN inventory_batches b ON b.id = i.batch_id
+      ORDER BY i.id DESC`,
+  },
+  {
+    name: "RAM Inventory",
+    source: "inventory_rams",
+    query: `SELECT i.id, i.serial_number, i.brand, s.ddr_version,
+      s.capacity_gb, s.bus_speed_mhz, i.status, i.batch_id,
+      b.description AS batch_description, i.notes, i.created_at, i.updated_at
+      FROM inventory_rams i
+      JOIN ram_specs s ON s.id = i.ram_spec_id
+      LEFT JOIN inventory_batches b ON b.id = i.batch_id
+      ORDER BY i.id DESC`,
+  },
+  {
+    name: "Storage Inventory",
+    source: "inventory_storage",
+    query: `SELECT i.id, i.serial_number, i.brand, s.storage_type,
+      s.form_factor, s.interface, s.capacity_gb, i.status, i.batch_id,
+      b.description AS batch_description, i.notes, i.created_at, i.updated_at
+      FROM inventory_storage i
+      JOIN storage_specs s ON s.id = i.storage_spec_id
+      LEFT JOIN inventory_batches b ON b.id = i.batch_id
+      ORDER BY i.id DESC`,
+  },
+  {
+    name: "Network Cards",
+    source: "inventory_network_cards",
+    query: `SELECT i.id, i.serial_number, s.model_name, i.status, i.batch_id,
+      b.description AS batch_description, i.notes, i.created_at, i.updated_at
+      FROM inventory_network_cards i
+      JOIN network_card_models s ON s.id = i.model_id
+      LEFT JOIN inventory_batches b ON b.id = i.batch_id
+      ORDER BY i.id DESC`,
+  },
+  {
+    name: "Flat Panels",
+    source: "inventory_flat_panels",
+    query: `SELECT i.id, i.serial_number, s.model_name, i.status, i.batch_id,
+      b.description AS batch_description, i.notes, i.created_at, i.updated_at
+      FROM inventory_flat_panels i
+      JOIN flat_panel_models s ON s.id = i.model_id
+      LEFT JOIN inventory_batches b ON b.id = i.batch_id
+      ORDER BY i.id DESC`,
+  },
+  {
+    name: "Inventory Batches",
+    source: "inventory_batches",
+    query: `SELECT b.id, b.batch_type, b.description, b.created_by,
+      u.full_name AS created_by_name, b.created_at, b.updated_at
+      FROM inventory_batches b
+      LEFT JOIN users u ON u.id = b.created_by
+      ORDER BY b.id DESC`,
+  },
+];
+
+const formatExportValue = (value) => {
+  if (value instanceof Date) return value;
+  if (value === null || value === undefined) return "";
+  return value;
+};
+
+const styleWorksheet = (worksheet) => {
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.autoFilter = {
+    from: "A1",
+    to: `${String.fromCharCode(64 + Math.min(worksheet.columnCount, 26))}1`,
+  };
+  const header = worksheet.getRow(1);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF1F4E78" },
+  };
+  header.alignment = { vertical: "middle" };
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) {
+      row.alignment = { vertical: "top", wrapText: true };
+      if (rowNumber % 2 === 0) {
+        row.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF3F6F9" },
+        };
+      }
+    }
+  });
+};
+
+const addDataSheet = (workbook, name, rows) => {
+  const worksheet = workbook.addWorksheet(name);
+  const columns = rows.length ? Object.keys(rows[0]) : ["message"];
+  worksheet.columns = columns.map((key) => ({
+    header: key
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    key,
+    width: Math.min(Math.max(key.length + 4, 14), 28),
+  }));
+  if (rows.length) {
+    rows.forEach((row) =>
+      worksheet.addRow(
+        Object.fromEntries(
+          columns.map((column) => [column, formatExportValue(row[column])]),
+        ),
+      ),
+    );
+  } else {
+    worksheet.addRow({ message: "No records found" });
+  }
+  worksheet.columns.forEach((column) => {
+    let maxLength = column.header.length;
+    column.eachCell({ includeEmpty: false }, (cell) => {
+      maxLength = Math.max(maxLength, String(cell.value ?? "").length);
+    });
+    column.width = Math.min(Math.max(maxLength + 2, 14), 35);
+  });
+  styleWorksheet(worksheet);
+  return worksheet;
+};
+
 export const getAssemblyDetails = async (req, res) => {
   try {
     const [rows] = await pool.query(getAssemblyDetailsQuery);
     res.json({ Status: true, data: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Error fetching report' });
+    res.status(500).json({ Status: false, Error: "Error fetching report" });
   }
 };
 
@@ -54,31 +185,41 @@ export const exportAssemblyDetailsExcel = async (req, res) => {
     const [rows] = await pool.query(getAssemblyDetailsQuery);
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Assembly & Repair Report');
+    const worksheet = workbook.addWorksheet("Assembly & Repair Report");
 
     worksheet.columns = [
-      { header: 'Assembly Date', key: 'assembly_date', width: 15 },
-      { header: 'Job Number', key: 'job_number', width: 20 },
-      { header: 'Smartboard Model', key: 'smartboard_model', width: 25 },
-      { header: 'OPS Model', key: 'ops_model', width: 20 },
-      { header: 'OPS Serial', key: 'ops_serial', width: 20 },
-      { header: 'Motherboard Serial', key: 'motherboard_serial', width: 25 },
-      { header: 'RAM Details', key: 'ram_details', width: 40 },
-      { header: 'Storage Details', key: 'storage_details', width: 40 },
-      { header: 'Software Keys', key: 'software_keys', width: 40 },
-      { header: 'Installed Additional Software', key: 'installed_softwares', width: 30 },
-      { header: 'Assembled By', key: 'assembled_by', width: 20 },
-      { header: 'Remarks', key: 'remarks', width: 30 },
+      { header: "Assembly Date", key: "assembly_date", width: 15 },
+      { header: "Job Number", key: "job_number", width: 20 },
+      { header: "Smartboard Model", key: "smartboard_model", width: 25 },
+      { header: "OPS Model", key: "ops_model", width: 20 },
+      { header: "OPS Serial", key: "ops_serial", width: 20 },
+      { header: "Motherboard Serial", key: "motherboard_serial", width: 25 },
+      { header: "RAM Details", key: "ram_details", width: 40 },
+      { header: "Storage Details", key: "storage_details", width: 40 },
+      { header: "Software Keys", key: "software_keys", width: 40 },
+      {
+        header: "Installed Additional Software",
+        key: "installed_softwares",
+        width: 30,
+      },
+      { header: "Assembled By", key: "assembled_by", width: 20 },
+      { header: "Remarks", key: "remarks", width: 30 },
     ];
 
     worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    worksheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
 
-    rows.forEach(row => {
+    rows.forEach((row) => {
       const dataRow = worksheet.addRow({
-        assembly_date: row.assembly_date ? new Date(row.assembly_date).toLocaleDateString() : '',
+        assembly_date: row.assembly_date
+          ? new Date(row.assembly_date).toLocaleDateString()
+          : "",
         job_number: row.job_number,
-        smartboard_model: row.smartboard_model || 'N/A',
+        smartboard_model: row.smartboard_model || "N/A",
         ops_model: row.ops_model,
         ops_serial: row.ops_serial,
         motherboard_serial: row.motherboard_serial,
@@ -87,19 +228,72 @@ export const exportAssemblyDetailsExcel = async (req, res) => {
         software_keys: row.software_keys,
         installed_softwares: row.installed_softwares,
         assembled_by: row.assembled_by,
-        remarks: row.remarks
+        remarks: row.remarks,
       });
-      dataRow.alignment = { wrapText: true, vertical: 'middle' };
+      dataRow.alignment = { wrapText: true, vertical: "middle" };
     });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="Assembly_Report.xlsx"');
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="Assembly_Report.xlsx"',
+    );
 
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Failed to generate Excel' });
+    res.status(500).json({ Status: false, Error: "Failed to generate Excel" });
+  }
+};
+
+export const exportInventoryExcel = async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Smartboard OPS Management";
+    workbook.created = new Date();
+
+    const summaryRows = [];
+    for (const sheet of inventorySheets) {
+      const [[counts]] = await pool.query(
+        sheet.source === "inventory_batches"
+          ? "SELECT COUNT(*) AS total FROM inventory_batches"
+          : `SELECT COUNT(*) AS total,
+              SUM(status = 'in_stock') AS in_stock,
+              SUM(status = 'assigned') AS assigned,
+              SUM(status = 'faulty') AS faulty,
+              SUM(status = 'reserved') AS reserved,
+              SUM(status = 'retired') AS retired,
+              SUM(status = 'borrowed') AS borrowed
+             FROM ${sheet.source}`,
+      );
+      summaryRows.push({ sheet: sheet.name, ...counts });
+    }
+    addDataSheet(workbook, "Summary", summaryRows);
+
+    for (const sheet of inventorySheets) {
+      const [rows] = await pool.query(sheet.query);
+      addDataSheet(workbook, sheet.name, rows);
+    }
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="Inventory_Report.xlsx"',
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Inventory Excel export failed:", err);
+    res
+      .status(500)
+      .json({ Status: false, Error: "Failed to generate inventory Excel" });
   }
 };
 
@@ -107,64 +301,81 @@ export const exportAssemblyDetailsPDF = async (req, res) => {
   try {
     const [rows] = await pool.query(getAssemblyDetailsQuery);
 
-    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="Assembly_Report.pdf"');
+    const doc = new PDFDocument({
+      margin: 30,
+      size: "A4",
+      layout: "landscape",
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="Assembly_Report.pdf"',
+    );
     doc.pipe(res);
 
-    doc.fontSize(20).text('Assembly & Repair Report', { align: 'center' });
+    doc.fontSize(20).text("Assembly & Repair Report", { align: "center" });
     doc.moveDown();
 
     rows.forEach((row, index) => {
       if (index !== 0) {
-          doc.addPage();
+        doc.addPage();
       }
-      doc.fontSize(16).text(`Job Number: ${row.job_number} | Assembly Date: ${row.assembly_date ? new Date(row.assembly_date).toLocaleDateString() : 'N/A'}`, { underline: true });
+      doc
+        .fontSize(16)
+        .text(
+          `Job Number: ${row.job_number} | Assembly Date: ${row.assembly_date ? new Date(row.assembly_date).toLocaleDateString() : "N/A"}`,
+          { underline: true },
+        );
       doc.moveDown(0.5);
-      
+
       doc.fontSize(12);
       doc.text(`Assembled By: ${row.assembled_by}`);
-      doc.text(`Smartboard Model: ${row.smartboard_model || 'N/A'}`);
+      doc.text(`Smartboard Model: ${row.smartboard_model || "N/A"}`);
       doc.text(`OPS Model: ${row.ops_model} (Serial: ${row.ops_serial})`);
       doc.text(`Motherboard Serial: ${row.motherboard_serial}`);
       doc.moveDown(0.5);
 
-      doc.font('Helvetica-Bold').text('RAM Details:');
-      doc.font('Helvetica').text(row.ram_details || 'None');
+      doc.font("Helvetica-Bold").text("RAM Details:");
+      doc.font("Helvetica").text(row.ram_details || "None");
       doc.moveDown(0.5);
 
-      doc.font('Helvetica-Bold').text('Storage Details:');
-      doc.font('Helvetica').text(row.storage_details || 'None');
+      doc.font("Helvetica-Bold").text("Storage Details:");
+      doc.font("Helvetica").text(row.storage_details || "None");
       doc.moveDown(0.5);
 
-      doc.font('Helvetica-Bold').text('Main Software & Keys:');
-      doc.font('Helvetica').text(row.software_keys || 'None');
+      doc.font("Helvetica-Bold").text("Main Software & Keys:");
+      doc.font("Helvetica").text(row.software_keys || "None");
       doc.moveDown(0.5);
 
-      doc.font('Helvetica-Bold').text('Additional Software:');
-      doc.font('Helvetica').text(row.installed_softwares || 'None');
+      doc.font("Helvetica-Bold").text("Additional Software:");
+      doc.font("Helvetica").text(row.installed_softwares || "None");
       doc.moveDown(0.5);
 
-      doc.font('Helvetica-Bold').text('Remarks:');
-      doc.font('Helvetica').text(row.remarks || 'No remarks provided.');
+      doc.font("Helvetica-Bold").text("Remarks:");
+      doc.font("Helvetica").text(row.remarks || "No remarks provided.");
       doc.moveDown();
     });
 
     if (rows.length === 0) {
-        doc.fontSize(12).text('No assemblies found for the report.', { align: 'center' });
+      doc
+        .fontSize(12)
+        .text("No assemblies found for the report.", { align: "center" });
     }
 
     doc.end();
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Failed to generate PDF' });
+    res.status(500).json({ Status: false, Error: "Failed to generate PDF" });
   }
 };
 
 export const getUnitHistory = async (req, res) => {
   const { serial } = req.query;
-  if (!serial) return res.status(400).json({ Status: false, Error: "Serial number required" });
-  
+  if (!serial)
+    return res
+      .status(400)
+      .json({ Status: false, Error: "Serial number required" });
+
   try {
     const unitQuery = `
       SELECT
@@ -181,9 +392,9 @@ export const getUnitHistory = async (req, res) => {
     `;
     const [units] = await pool.query(unitQuery, [serial, serial, serial]);
     if (units.length === 0) return res.json({ Status: true, data: null });
-    
+
     const unit = units[0];
-    
+
     const repairQuery = `
       SELECT rj.repair_number, rj.reported_issue, rj.status, rj.created_at, u.full_name AS technician
       FROM repair_jobs rj
@@ -192,11 +403,13 @@ export const getUnitHistory = async (req, res) => {
       ORDER BY rj.created_at DESC
     `;
     const [repairs] = await pool.query(repairQuery, [unit.unit_id]);
-    
+
     res.json({ Status: true, data: { ...unit, repairs } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Error fetching unit history' });
+    res
+      .status(500)
+      .json({ Status: false, Error: "Error fetching unit history" });
   }
 };
 
@@ -214,7 +427,9 @@ export const getTechnicianPerformance = async (req, res) => {
     res.json({ Status: true, data: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Error fetching technician performance' });
+    res
+      .status(500)
+      .json({ Status: false, Error: "Error fetching technician performance" });
   }
 };
 
@@ -241,7 +456,9 @@ export const getInventoryConsumption = async (req, res) => {
     res.json({ Status: true, data: { ramUsage, storageUsage } });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Error fetching inventory consumption' });
+    res
+      .status(500)
+      .json({ Status: false, Error: "Error fetching inventory consumption" });
   }
 };
 
@@ -261,6 +478,8 @@ export const getJobProgress = async (req, res) => {
     res.json({ Status: true, data: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ Status: false, Error: 'Error fetching job progress' });
+    res
+      .status(500)
+      .json({ Status: false, Error: "Error fetching job progress" });
   }
 };
