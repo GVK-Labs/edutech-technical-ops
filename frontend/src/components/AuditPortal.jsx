@@ -297,7 +297,7 @@ export default function AuditPortal() {
               </div>
               <Badge variant="outline">24h</Badge>
             </div>
-            <div className="h-40 border-b border-l px-2">
+            <div className="relative h-40 min-w-0 border-b border-l px-2">
               {overview.hourly.length === 0 ? (
                 <p className="pt-14 text-center text-xs text-muted-foreground">
                   No activity in the last 24 hours.
@@ -305,7 +305,7 @@ export default function AuditPortal() {
               ) : (
                 <ChartContainer
                   config={activityChartConfig}
-                  className="h-full w-full"
+                  className="h-full min-h-0 min-w-0 w-full aspect-auto"
                 >
                   <LineChart
                     accessibilityLayer

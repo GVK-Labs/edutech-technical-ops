@@ -13,13 +13,11 @@ const auditVisibilityEnabled = async () => {
 
 const requireAuditVisibility = async (res) => {
   if (await auditVisibilityEnabled()) return true;
-  res
-    .status(403)
-    .json({
-      Status: false,
-      Error:
-        "Auditor activity visibility is disabled by the server administrator",
-    });
+  res.status(403).json({
+    Status: false,
+    Error:
+      "Auditor activity visibility is disabled by the server administrator",
+  });
   return false;
 };
 
@@ -31,8 +29,8 @@ export const getAuditOverview = async (req, res) => {
       pool.query(`
         SELECT
           COUNT(*) AS total,
-          SUM(created_at >= NOW() - INTERVAL 24 HOUR) AS last_24_hours,
-          SUM(created_at >= NOW() - INTERVAL 1 HOUR) AS last_hour,
+          SUM(CASE WHEN created_at >= NOW() - INTERVAL 24 HOUR THEN 1 ELSE 0 END) AS last_24_hours,
+          SUM(CASE WHEN created_at >= NOW() - INTERVAL 1 HOUR THEN 1 ELSE 0 END) AS last_hour,
           COUNT(DISTINCT user_id) AS actors,
           COUNT(DISTINCT entity_type) AS entities
         FROM audit_logs`),
@@ -47,7 +45,7 @@ export const getAuditOverview = async (req, res) => {
         SELECT COALESCE(entity_type, 'system') AS entity_type, COUNT(*) AS count
         FROM audit_logs
         WHERE created_at >= NOW() - INTERVAL 24 HOUR
-        GROUP BY entity_type
+        GROUP BY COALESCE(entity_type, 'system')
         ORDER BY count DESC
         LIMIT 8`),
       pool.query(`
@@ -55,14 +53,14 @@ export const getAuditOverview = async (req, res) => {
         FROM audit_logs al
         LEFT JOIN users u ON u.id = al.user_id
         WHERE al.created_at >= NOW() - INTERVAL 24 HOUR
-        GROUP BY al.user_id, u.full_name
+        GROUP BY COALESCE(u.full_name, 'System')
         ORDER BY count DESC
         LIMIT 8`),
       pool.query(`
         SELECT DATE_FORMAT(created_at, '%H:00') AS hour, COUNT(*) AS count
         FROM audit_logs
         WHERE created_at >= NOW() - INTERVAL 24 HOUR
-        GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d %H')
+        GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d %H'), DATE_FORMAT(created_at, '%H:00')
         ORDER BY MIN(created_at)`),
     ]);
     const dbLatencyMs = Math.round(performance.now() - dbStarted);
@@ -91,6 +89,7 @@ export const getAuditOverview = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("Audit overview query failed:", err.message);
     res.status(500).json({ Status: false, Error: err.message });
   }
 };
