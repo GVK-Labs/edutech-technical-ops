@@ -79,3 +79,90 @@ export const updateSystemSettings = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+const escapeSqlValue = (value) => {
+  if (value === null || value === undefined) return "NULL";
+  if (Buffer.isBuffer(value)) return `X'${value.toString("hex")}'`;
+  if (value instanceof Date)
+    return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
+  if (typeof value === "number") return Number.isFinite(value) ? `${value}` : "NULL";
+  if (typeof value === "boolean") return value ? "1" : "0";
+  return `'${String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")}'`;
+};
+
+export const exportDatabaseBackup = async (req, res) => {
+  try {
+    const [dbRows] = await pool.query("SELECT DATABASE() AS db_name");
+    const databaseName = dbRows[0]?.db_name || "database";
+
+    const [tableRows] = await pool.query("SHOW TABLES");
+    const tableNames = tableRows.map((row) => Object.values(row)[0]).filter(Boolean);
+
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(
+      2,
+      "0",
+    )}${String(now.getDate()).padStart(2, "0")}_${String(
+      now.getHours(),
+    ).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(
+      now.getSeconds(),
+    ).padStart(2, "0")}`;
+
+    const lines = [
+      `-- Backup of ${databaseName}`,
+      `-- Generated at ${now.toISOString()}`,
+      "SET NAMES utf8mb4;",
+      "SET FOREIGN_KEY_CHECKS=0;",
+      "",
+    ];
+
+    for (const tableName of tableNames) {
+      const [createRows] = await pool.query(`SHOW CREATE TABLE \`${tableName}\``);
+      const createTableSql =
+        createRows[0]?.["Create Table"] ||
+        createRows[0]?.[Object.keys(createRows[0]).find((key) => key.includes("Create Table"))];
+
+      if (!createTableSql) continue;
+
+      lines.push(`-- Table: ${tableName}`);
+      lines.push(`DROP TABLE IF EXISTS \`${tableName}\`;`);
+      lines.push(`${createTableSql};`);
+
+      const [rows] = await pool.query(`SELECT * FROM \`${tableName}\``);
+
+      if (rows.length) {
+        const columnNames = Object.keys(rows[0]).map((column) => `\`${column}\``).join(", ");
+        lines.push(`INSERT INTO \`${tableName}\` (${columnNames}) VALUES`);
+
+        const valueLines = rows.map((row) => {
+          const values = Object.keys(row)
+            .map((column) => escapeSqlValue(row[column]))
+            .join(", ");
+          return `(${values})`;
+        });
+
+        lines.push(`${valueLines.join(",\n")};`);
+      }
+
+      lines.push("");
+    }
+
+    lines.push("SET FOREIGN_KEY_CHECKS=1;");
+    lines.push("");
+
+    const dump = lines.join("\n");
+
+    res.setHeader("Content-Type", "application/sql");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${databaseName}_backup_${timestamp}.sql"`,
+    );
+    res.send(dump);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

@@ -5,6 +5,7 @@ import {
   getSystemSettings,
   getPublicBranding,
   updateSystemSettings,
+  exportDatabaseBackup,
 } from "../controllers/settings.Controller.js";
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.get("/system", getSystemSettings);
 
 // Only administrators can modify system settings
 router.put("/system", ...verifyAdmin, updateSystemSettings);
+router.get("/backup/export-db", ...verifyAdmin, exportDatabaseBackup);
 
 export default router;
