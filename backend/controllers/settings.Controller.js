@@ -1,4 +1,5 @@
 import pool from "../config/db.config.js";
+import mysql from "mysql2";
 
 const INIT_SQL = `
 CREATE TABLE IF NOT EXISTS system_settings (
@@ -77,5 +78,69 @@ export const updateSystemSettings = async (req, res) => {
     res.json({ success: true, message: "Settings updated" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const quoteIdentifier = (identifier) =>
+  `\`${String(identifier).replaceAll("`", "``")}\``;
+
+const createInsertStatement = (tableName, columns, row) => {
+  const values = columns.map((column) => mysql.escape(row[column])).join(", ");
+  return `INSERT INTO ${quoteIdentifier(tableName)} (${columns
+    .map(quoteIdentifier)
+    .join(", ")}) VALUES (${values});`;
+};
+
+export const exportDatabaseSql = async (req, res) => {
+  try {
+    const [tableRows] = await pool.query(
+      "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'",
+    );
+    const tableKey = Object.keys(tableRows[0] || {}).find(
+      (key) => key !== "Table_type",
+    );
+    const chunks = [
+      "-- Smartboard OPS Management database backup",
+      `-- Generated at ${new Date().toISOString()}`,
+      "SET FOREIGN_KEY_CHECKS=0;",
+      "",
+    ];
+
+    for (const tableRow of tableRows) {
+      const tableName = tableRow[tableKey];
+      const [[createTable]] = await pool.query(
+        `SHOW CREATE TABLE ${quoteIdentifier(tableName)}`,
+      );
+      const createStatement = createTable["Create Table"];
+      const [rows] = await pool.query(
+        `SELECT * FROM ${quoteIdentifier(tableName)}`,
+      );
+      const columns = rows.length
+        ? Object.keys(rows[0])
+        : (
+            await pool.query(`SHOW COLUMNS FROM ${quoteIdentifier(tableName)}`)
+          )[0].map((column) => column.Field);
+
+      chunks.push(`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)};`);
+      chunks.push(`${createStatement};`);
+      for (const row of rows) {
+        chunks.push(createInsertStatement(tableName, columns, row));
+      }
+      chunks.push("");
+    }
+
+    chunks.push("SET FOREIGN_KEY_CHECKS=1;", "");
+    const filename = `smartboard_ops_backup_${new Date().toISOString().slice(0, 10)}.sql`;
+    res.setHeader("Content-Type", "application/sql; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=\"${filename}\"`,
+    );
+    res.send(chunks.join("\n"));
+  } catch (err) {
+    console.error("Database SQL export failed:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to export database" });
   }
 };

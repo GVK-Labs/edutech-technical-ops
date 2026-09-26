@@ -8,7 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Settings as SettingsIcon, UserCog, Palette } from "lucide-react";
+import {
+  DatabaseBackup,
+  Settings as SettingsIcon,
+  UserCog,
+  Palette,
+} from "lucide-react";
 
 const categories = [
   {
@@ -40,6 +45,16 @@ const categories = [
     color: "text-purple-600",
     bg: "bg-purple-50",
     path: "/app/settings/system-configuration",
+    roles: ["admin"],
+  },
+  {
+    id: "backup",
+    title: "Database Backup",
+    description: "Export the complete database as a SQL file",
+    icon: DatabaseBackup,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+    path: "/app/settings/backup",
     roles: ["admin"],
   },
 ];

@@ -2,6 +2,7 @@ import express from "express";
 import { verifyAdmin } from "../middleware/auth.js";
 
 import {
+  exportDatabaseSql,
   getSystemSettings,
   getPublicBranding,
   updateSystemSettings,
@@ -15,5 +16,6 @@ router.get("/system", getSystemSettings);
 
 // Only administrators can modify system settings
 router.put("/system", ...verifyAdmin, updateSystemSettings);
+router.get("/backup", ...verifyAdmin, exportDatabaseSql);
 
 export default router;

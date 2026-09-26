@@ -3,6 +3,7 @@ import SettingsHub from "./SettingsHub";
 import AccountSettings from "./AccountSettings";
 import PreferencesSettings from "./PreferencesSettings";
 import SystemConfiguration from "./SystemConfiguration";
+import BackupSettings from "./BackupSettings";
 import RoleRoute from "../RoleRoute";
 
 export default function SettingsRouter() {
@@ -37,6 +38,14 @@ export default function SettingsRouter() {
         element={
           <RoleRoute allowedRoles={["admin"]}>
             <SystemConfiguration />
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="backup"
+        element={
+          <RoleRoute allowedRoles={["admin"]}>
+            <BackupSettings />
           </RoleRoute>
         }
       />
