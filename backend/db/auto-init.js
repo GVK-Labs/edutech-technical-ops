@@ -150,8 +150,13 @@ async function resetDatabaseTables(conn) {
 
   if (tableNames.length === 0) return;
 
-  for (const tableName of tableNames) {
-    await conn.query(`DROP TABLE IF EXISTS \`${tableName}\``);
+  await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+  try {
+    for (const tableName of tableNames) {
+      await conn.query(`DROP TABLE IF EXISTS \`${tableName}\``);
+    }
+  } finally {
+    await conn.query("SET FOREIGN_KEY_CHECKS = 1");
   }
 
   console.log(`🧹 Reset ${tableNames.length} tables before restoring schema`);
