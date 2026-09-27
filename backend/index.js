@@ -82,9 +82,14 @@ autoInitialize()
     // app.use('/reports',       reportsRouter);
     // app.use('/audit',         auditRouter);
 
-    app.listen(PORT, () =>
-      console.log(`🚀 Server running on http://localhost:${PORT}`),
-    );
+    const server = Deno.serve(
+  {
+    port: PORT,
+  },
+  app,
+);
+
+console.log(`🚀 Server started on port ${PORT}`);
   })
   .catch((err) => {
     console.error("❌ Failed to initialise database:", err.message);
