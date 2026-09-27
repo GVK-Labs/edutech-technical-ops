@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test db/auto-init.test.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "db:restore-backup": "node db/restore-backup.js"
   },
   "keywords": [],
   "author": "",
