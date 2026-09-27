@@ -132,6 +132,12 @@ async function ensureTimestampColumns(conn) {
   }
 }
 
+export function hasRequiredInitialization(tableNames = []) {
+  const requiredTables = ["users", "jobs", "inventory_ops", "system_settings"];
+
+  return requiredTables.every((tableName) => tableNames.includes(tableName));
+}
+
 async function autoInitialize() {
   const dbName = process.env.DB_NAME || "smartboard_ops_management";
 
@@ -162,13 +168,15 @@ async function autoInitialize() {
   );
   await conn.query(`USE \`${dbName}\``);
 
-  // 2. Skip if already has tables
-  const [[{ cnt }]] = await conn.query(
-    `SELECT COUNT(*) AS cnt FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?`,
-    [dbName],
-  );
-  if (cnt > 0) {
-    console.log("✅ Database is available, skipping automatic initialization");
+  // 2. Only skip if the schema is actually present.
+  // A database can exist with a few unrelated tables but still be missing the
+  // app's required user/job tables.
+  const [rows] = await conn.query("SHOW TABLES");
+  const tableNames = rows.map((row) => Object.values(row)[0]);
+  if (hasRequiredInitialization(tableNames)) {
+    console.log(
+      "✅ Database schema is present, skipping automatic initialization",
+    );
     await conn.end();
     return;
 
