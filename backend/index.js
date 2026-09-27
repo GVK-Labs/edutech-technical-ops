@@ -30,6 +30,27 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/health/db", async (req, res) => {
+  try {
+    const { default: pool } = await import("./db/db.js");
+
+    const [rows] = await pool.query("SELECT 1 AS db_connected");
+
+    res.json({
+      status: "ok",
+      database: "connected",
+      result: rows[0],
+    });
+  } catch (error) {
+    console.error("❌ Database health check failed:", error);
+
+    res.status(500).json({
+      status: "error",
+      database: "not connected",
+      error: error.message,
+    });
+  }
+});
 
 // Init DB first, then import routers (so pool connects to an existing DB)
 autoInitialize()
