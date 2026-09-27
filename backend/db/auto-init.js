@@ -133,9 +133,28 @@ async function ensureTimestampColumns(conn) {
 }
 
 export function hasRequiredInitialization(tableNames = []) {
-  const requiredTables = ["users", "jobs", "inventory_ops", "system_settings"];
+  const requiredTables = [
+    "users",
+    "jobs",
+    "inventory_ops",
+    "system_settings",
+    "audit_logs",
+  ];
 
   return requiredTables.every((tableName) => tableNames.includes(tableName));
+}
+
+async function resetDatabaseTables(conn) {
+  const [rows] = await conn.query("SHOW TABLES");
+  const tableNames = rows.map((row) => Object.values(row)[0]);
+
+  if (tableNames.length === 0) return;
+
+  for (const tableName of tableNames) {
+    await conn.query(`DROP TABLE IF EXISTS \`${tableName}\``);
+  }
+
+  console.log(`🧹 Reset ${tableNames.length} tables before restoring schema`);
 }
 
 async function autoInitialize() {
@@ -370,6 +389,10 @@ async function autoInitialize() {
   }
 
   console.log("🔧 Initialising database schema...");
+
+  // If the database is partially-created or mismatched, wipe the app tables
+  // first so the backup import does not fail on duplicate primary keys.
+  await resetDatabaseTables(conn);
 
   // 3. Read SQL and preserve trigger bodies while parsing DELIMITER directives.
   const raw = fs.readFileSync(

@@ -9,12 +9,18 @@ test("skip initialization only when the required auth schema exists", () => {
       "jobs",
       "inventory_ops",
       "system_settings",
+      "audit_logs",
     ]),
     true,
   );
 
   assert.equal(
-    hasRequiredInitialization(["audit_logs", "provinces", "districts"]),
+    hasRequiredInitialization([
+      "users",
+      "jobs",
+      "inventory_ops",
+      "system_settings",
+    ]),
     false,
   );
 
