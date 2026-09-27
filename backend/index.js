@@ -5,7 +5,7 @@ import "dotenv/config";
 import autoInitialize from "./db/auto-init.js";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 8000);
 
 const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(",")
