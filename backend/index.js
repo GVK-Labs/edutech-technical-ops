@@ -31,6 +31,14 @@ app.use(cookieParser());
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
+console.log("DB config:", {
+  host: process.env.DB_HOST || "localhost",
+  port: process.env.DB_PORT || "3306",
+  database: process.env.DB_NAME || "smartboard_ops_management",
+  user: process.env.DB_USER || "root",
+  ssl: !!process.env.DB_SSL_CA || process.env.DB_USE_SSL === "true",
+});
+
 // Init DB first, then import routers (so pool connects to an existing DB)
 autoInitialize()
   .then(async () => {

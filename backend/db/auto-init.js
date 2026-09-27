@@ -135,18 +135,25 @@ async function ensureTimestampColumns(conn) {
 async function autoInitialize() {
   const dbName = process.env.DB_NAME || "smartboard_ops_management";
 
+  const sslConfig = process.env.DB_SSL_CA
+    ? {
+        ca: process.env.DB_SSL_CA,
+        rejectUnauthorized: true,
+      }
+    : process.env.DB_USE_SSL === "true"
+      ? {
+          rejectUnauthorized: false,
+        }
+      : undefined;
+
   const conn = await mysql.createConnection({
     host: process.env.DB_HOST || "localhost",
-    port: parseInt(process.env.DB_PORT) || 3306,
+    port: parseInt(process.env.DB_PORT, 10) || 3306,
     user: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD ?? "",
     multipleStatements: true,
-    ssl: process.env.DB_SSL_CA
-      ? {
-          ca: process.env.DB_SSL_CA,
-          rejectUnauthorized: true,
-        }
-      : undefined,
+    charset: "utf8mb4",
+    ssl: sslConfig,
   });
 
   // 1. Create DB if missing
