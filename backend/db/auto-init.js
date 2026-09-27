@@ -136,18 +136,18 @@ async function autoInitialize() {
   const dbName = process.env.DB_NAME || "smartboard_ops_management";
 
   const conn = await mysql.createConnection({
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT) || 3306,
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD ?? "",
-  multipleStatements: true,
-  ssl: process.env.DB_SSL_CA
-    ? {
-        ca: process.env.DB_SSL_CA,
-        rejectUnauthorized: true,
-      }
-    : undefined,
-});
+    host: process.env.DB_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD ?? "",
+    multipleStatements: true,
+    ssl: process.env.DB_SSL_CA
+      ? {
+          ca: process.env.DB_SSL_CA,
+          rejectUnauthorized: true,
+        }
+      : undefined,
+  });
 
   // 1. Create DB if missing
   await conn.query(
@@ -161,7 +161,10 @@ async function autoInitialize() {
     [dbName],
   );
   if (cnt > 0) {
-    console.log("✅ Database already initialised, skipping schema import");
+    console.log("✅ Database is available, skipping automatic initialization");
+    await conn.end();
+    return;
+
     const alterations = [
       {
         sql: `CREATE TABLE IF NOT EXISTS audit_logs (
