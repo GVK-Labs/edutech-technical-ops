@@ -8,7 +8,7 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const dbName = process.env.DB_NAME || "smartboard_ops_management";
+const dbName = process.env.DB_NAME || "defaultdb";
 const sslConfig = process.env.DB_SSL_CA
   ? {
       ca: process.env.DB_SSL_CA,

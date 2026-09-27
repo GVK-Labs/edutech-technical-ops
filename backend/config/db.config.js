@@ -19,7 +19,7 @@ const pool = mysql.createPool({
   port: parseInt(process.env.DB_PORT, 10) || 3306,
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD ?? "",
-  database: process.env.DB_NAME || "smartboard_ops_management",
+  database: process.env.DB_NAME || "defaultdb",
   charset: "utf8mb4",
   ssl: sslConfig,
   waitForConnections: true,

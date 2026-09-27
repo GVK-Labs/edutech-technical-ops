@@ -132,6 +132,10 @@ async function ensureTimestampColumns(conn) {
   }
 }
 
+export function getDefaultDatabaseName() {
+  return process.env.DB_NAME || "defaultdb";
+}
+
 export function hasRequiredInitialization(tableNames = []) {
   const requiredTables = [
     "users",
@@ -142,6 +146,27 @@ export function hasRequiredInitialization(tableNames = []) {
   ];
 
   return requiredTables.every((tableName) => tableNames.includes(tableName));
+}
+
+async function ensureAuditLogsTable(conn) {
+  const [rows] = await conn.query("SHOW TABLES LIKE 'audit_logs'");
+  if (rows.length > 0) return;
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id INT UNSIGNED NULL,
+      action VARCHAR(100) NOT NULL,
+      entity_type VARCHAR(50) NULL,
+      entity_id INT UNSIGNED NULL,
+      details TEXT NULL,
+      ip_address VARCHAR(45) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB
+  `);
+
+  console.log("✅ Created missing audit_logs table");
 }
 
 async function resetDatabaseTables(conn) {
@@ -163,7 +188,7 @@ async function resetDatabaseTables(conn) {
 }
 
 async function autoInitialize() {
-  const dbName = process.env.DB_NAME || "smartboard_ops_management";
+  const dbName = getDefaultDatabaseName();
 
   const sslConfig = process.env.DB_SSL_CA
     ? {
@@ -198,6 +223,7 @@ async function autoInitialize() {
   const [rows] = await conn.query("SHOW TABLES");
   const tableNames = rows.map((row) => Object.values(row)[0]);
   if (hasRequiredInitialization(tableNames)) {
+    await ensureAuditLogsTable(conn);
     console.log(
       "✅ Database schema is present, skipping automatic initialization",
     );

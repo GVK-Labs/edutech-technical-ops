@@ -66,7 +66,7 @@ app.get("/api/health/db", async (req, res) => {
 console.log("DB config:", {
   host: process.env.DB_HOST || "localhost",
   port: process.env.DB_PORT || "3306",
-  database: process.env.DB_NAME || "smartboard_ops_management",
+  database: process.env.DB_NAME || "defaultdb",
   user: process.env.DB_USER || "root",
   ssl: !!process.env.DB_SSL_CA || process.env.DB_USE_SSL === "true",
 });
