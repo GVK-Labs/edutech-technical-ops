@@ -2,14 +2,14 @@
 // All API calls should use this base URL instead of hardcoded localhost
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const normalizedApiUrl = configuredApiUrl
+  ? /^https?:\/\//i.test(configuredApiUrl)
+    ? configuredApiUrl.replace(/\/$/, "")
+    : `https://${configuredApiUrl}`
+  : null;
 
-export const API_URL = import.meta.env.PROD
-  ? "/api"
-  : configuredApiUrl
-    ? /^https?:\/\//i.test(configuredApiUrl)
-      ? configuredApiUrl.replace(/\/$/, "")
-      : `https://${configuredApiUrl}`
-    : "http://localhost:3000";
+export const API_URL =
+  normalizedApiUrl || (import.meta.env.PROD ? "/api" : "http://localhost:3000");
 
 // Helper function to build full API endpoint URLs
 export const apiUrl = (endpoint) => {
