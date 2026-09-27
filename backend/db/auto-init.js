@@ -358,7 +358,7 @@ async function autoInitialize() {
 
   // 3. Read SQL and preserve trigger bodies while parsing DELIMITER directives.
   const raw = fs.readFileSync(
-    path.join(__dirname, "smartboard_ops_management.sql"),
+    path.join(__dirname, "smartboard_ops_management_backup.sql"),
     "utf8",
   );
 
